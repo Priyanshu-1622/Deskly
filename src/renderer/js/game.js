@@ -120,8 +120,15 @@
   const objects = [
     ...M.filter(m => m.kind === 'coffee').map(c => ({ key: 'coffee' + c.p[0], x: c.p[0] + c.f[0] * 0.5, z: c.p[2] + c.f[1] * 0.5, r: 1.6, label: 'Grab a coffee', short: 'Coffee', fn: () => { player.giveCoffee(); ui.toast('Fresh coffee in hand.', '#c08a5a'); } })),
     ...(exec ? [{ key: 'desk', x: exec.p[0] + exec.f[0] * 0.3, z: exec.p[2] + exec.f[1] * 0.3, r: 1.8, desk: true, short: 'Desk', fn: () => player.seated ? app.openLaptop() : app.sit() }] : []),
+    ...M.filter(m => m.kind === 'chair' && ['Boardroom', 'Meeting_1', 'Meeting_2', 'Meeting_3'].includes(m.room)).map(c => ({
+      key: `seat${c.p[0]}:${c.p[2]}`, x: c.p[0] - c.f[0] * 0.6, z: c.p[2] - c.f[1] * 0.6,
+      r: 1.25, seat: c, short: 'Sit', fn: () => app.sit(c)
+    })),
     ...[['Boardroom', 14, 32.2], ['Meeting_1', 20, 32.2], ['Meeting_2', 24, 32.2], ['Meeting_3', 28, 32.2]].map(([id, x, z]) => ({ key: 'room' + id, x, z, r: 2.6, room: id, short: 'Meeting', fn: () => app.office.meeting ? ui.meetingLive() : ui.openMeeting(null, id) }))
   ];
+  app.canSitAt = seat => !player.seated &&
+    !app.office?.employees.some(e => e.posture === 'sit' && e.sitSeat === seat) &&
+    !app.office?.meeting?.people.some(e => e.meetSeat === seat);
   let focus = null;
   function findFocus() {
     const f = player.forward(), eye = camera.position, look = new T.Vector3(); camera.getWorldDirection(look);
@@ -135,6 +142,7 @@
     }
     if (best) return best;
     for (const o of objects) {
+      if (o.seat && !app.canSitAt(o.seat)) continue;
       const dx = o.x - player.pos.x, dz = o.z - player.pos.z, d = Math.hypot(dx, dz);
       if (d > o.r) continue;
       const ang = Math.acos(Math.max(-1, Math.min(1, (dx * f.x + dz * f.z) / (d || 1))));
@@ -152,11 +160,16 @@
     }
     const o = f.o;
     if (o.desk) return player.seated ? { key: 'lap', label: 'Open your laptop', sub: 'or C to call people', short: 'Laptop' } : { key: 'sit', label: 'Sit at your desk', sub: 'work from your chair', short: 'Sit' };
+    if (o.seat) return { key: o.key, label: 'Sit in the meeting room', sub: 'W A S D to stand up · M to run a meeting', short: 'Sit' };
     return { key: o.key, label: o.room ? (app.office.meeting ? 'Run the meeting' : `Call a meeting in ${o.room.replace('_', ' ')}`) : o.label, sub: o.sub, short: o.short };
   };
-  app.sit = () => {
-    player.seated = true; player.pos.set(exec.p[0], 0, exec.p[2]); player.yaw = Math.atan2(-exec.f[0], -exec.f[1]); player.pitch = -0.12; player.eyeY = 1.22;
-    ui.toast('At your desk. L laptop · C call people · Tab board · W to stand up.', '#f2c230');
+  app.sit = (seat = exec) => {
+    if (!seat || player.seated || (seat !== exec && !app.canSitAt(seat))) return;
+    const returnPos = player.pos.clone();
+    player.onStand = () => { player.pos.copy(returnPos); player.seat = null; player.onStand = null; };
+    player.seat = seat; player.seated = true;
+    player.pos.set(seat.p[0], 0, seat.p[2]); player.yaw = Math.atan2(-seat.f[0], -seat.f[1]); player.pitch = -0.12; player.eyeY = (seat.seat || 0.52) + 0.7;
+    ui.toast(seat === exec ? 'At your desk. L laptop · C call people · Tab board · W to stand up.' : 'Take a seat. M to run a meeting · W A S D to stand up.', '#f2c230');
   };
   app.interact = () => { if (ui.panelKind || !focus) return; if (focus.kind === 'emp') ui.openEmployee(focus.e); else focus.o.fn(); };
   app.office = null;

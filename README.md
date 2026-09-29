@@ -25,9 +25,14 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 ## Inside Deskly
 
 <p align="center">
-  <img src="docs/screenshots/office.png" alt="First-person view inside the Deskly office" width="100%">
-  <br><sub>Walk the office, find teammates, and see task status without leaving the world.</sub>
+  <img src="docs/screenshots/meeting.png" alt="All 15 AI teammates gathered around the boardroom table, viewed from the founder's reserved seat" width="100%">
+  <br><sub>Call the whole team to the boardroom, take your seat, and lead the meeting.</sub>
 </p>
+
+<details>
+  <summary>See the office floor</summary>
+  <br><img src="docs/screenshots/office.png" alt="First-person view inside the Deskly office" width="100%">
+</details>
 
 <table>
   <tr>
@@ -41,7 +46,7 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 | Area | What you can do |
 | --- | --- |
-| 3D office | Walk in first person; meet employees at their desks; use the operations board, rooms, meetings, and your laptop. Idle employees animate without making AI calls. |
+| 3D office | Walk in first person; meet employees at their desks; sit in an available meeting chair; use the operations board, rooms, meetings, and your laptop. Idle employees animate without making AI calls. |
 | Your team | Hire from role presets, edit work instructions and appearance, and inspect a skills and knowledge resume for each employee. |
 | AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, or an OpenAI-compatible endpoint per employee. The laptop assistant can use a separate setup. |
 | Project work | Assign tasks against a selected project folder. An employee plans, reads and writes files, reports progress, and returns a result for review. |
@@ -78,11 +83,12 @@ The repository also declares `dist:mac` and `dist:linux` targets. Run those on t
 | --- | --- |
 | **W A S D** / **Shift** | Walk / move faster |
 | **Mouse** | Look around; click the office view to capture the pointer |
-| **E** | Talk, interact, or sit at your desk |
+| **E** | Talk, interact, or sit in an available chair |
 | **L** | Open your laptop |
 | **Tab** | Open the operations board |
 | **C** | Call people to your office or a meeting room |
 | **M** | Start a meeting |
+| **W A S D** while seated | Stand up and return to where you sat down |
 | **Esc** | Close a panel or pause |
 | **F11** | Full screen |
 

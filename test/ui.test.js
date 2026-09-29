@@ -34,3 +34,39 @@ test('a panel update error does not stop the office frame loop', () => {
   assert.equal(ui.onRender, null);
   assert.equal(shown.length, 1);
 });
+
+test('a full boardroom meeting reserves the founder chair and keeps overflow off the table', () => {
+  const window = {};
+  const source = fs.readFileSync(path.join(__dirname, '../src/renderer/js/agents.js'), 'utf8');
+  vm.runInNewContext(source, {
+    window, THREE: {}, DesklyPresets: { DEPARTMENTS: {} },
+    setTimeout: fn => fn()
+  });
+  const chairs = [
+    { kind: 'chair', room: 'Boardroom', p: [11.1, 0, 32.2], f: [1, 0] },
+    ...Array.from({ length: 10 }, (_, i) => ({ kind: 'chair', room: 'Boardroom', p: [12 + Math.floor(i / 2), 0, i % 2 ? 33.6 : 30.8], f: [0, i % 2 ? -1 : 1] }))
+  ];
+  const people = Array.from({ length: 15 }, (_, i) => ({
+    id: String(i), clear() {}, say() {}, goDesk() {},
+    approach: seat => ({ x: seat.p[0] - seat.f[0] * 0.62, z: seat.p[2] - seat.f[1] * 0.62 }),
+    push(...actions) { this.actions = actions; }
+  }));
+  const office = Object.create(window.DesklyAgents.Office.prototype);
+  office.chairs = chairs;
+  office.ctx = { time: 0, player: { seated: false } };
+  office.meeting = null;
+  const meeting = office.callMeeting('Boardroom', people, 'Project kickoff');
+  assert.equal(meeting.playerSeat, chairs[0]);
+  assert.equal(people.filter(e => e.meetSeat).length, 10);
+  assert.ok(people.every(e => e.meetSeat !== chairs[0]));
+  assert.ok(people.filter(e => !e.meetSeat).every(e => e.actions.find(a => a.type === 'goto').z < 30));
+
+  const chosenChair = chairs[4];
+  const nextOffice = Object.create(window.DesklyAgents.Office.prototype);
+  nextOffice.chairs = chairs;
+  nextOffice.ctx = { time: 0, player: { seated: true, seat: chosenChair } };
+  nextOffice.meeting = null;
+  const next = nextOffice.callMeeting('Boardroom', people, 'Review');
+  assert.equal(next.playerSeat, chosenChair);
+  assert.ok(people.every(e => e.meetSeat !== chosenChair));
+});

@@ -382,7 +382,7 @@
       const app = this.app, of = app.office;
       if (of.meeting) return this.meetingLive();
       const rooms = [['CEO_Office', 'My office'], ['Boardroom', 'Boardroom · 11 seats'], ['Meeting_1', 'Meeting room 1'], ['Meeting_2', 'Meeting room 2'], ['Meeting_3', 'Meeting room 3']];
-      let sel = room || (app.player.seated ? 'CEO_Office' : 'Boardroom');
+      let sel = room || app.player.seat?.room || (app.player.seated ? 'CEO_Office' : 'Boardroom');
       const quick = h('div', { class: 'row' });
       const present = of.employees.filter(e => e.present);
       const chosen = new Set(depts ? present.filter(e => depts.includes(e.dept)).map(e => e.id) : present.map(e => e.id));
@@ -413,7 +413,7 @@
       const transcript = h('div', { class: 'chat' });
       const lines = m.lines;
       const addLine = (e, l) => { lines.push({ e, l }); renderT(); };
-      const renderT = () => transcript.replaceChildren(...lines.slice(-12).map(x => h('div', { class: 'them' }, h('b', {}, x.fname(e.name) + ': '), x.l)));
+      const renderT = () => transcript.replaceChildren(...lines.slice(-12).map(x => h('div', { class: 'them' }, h('b', {}, fname(x.e.name) + ': '), x.l)));
       renderT();
       const topic = h('input', { type: 'text', id: 'meetTopic2', value: m.topic || '', placeholder: 'What should the team think about?' });
       const b1 = h('button', { class: 'btn', type: 'button', onclick: async () => { b1.disabled = b2.disabled = true; await of.runStandup(addLine); b1.disabled = b2.disabled = false; } }, 'Go around: status updates');
@@ -424,7 +424,7 @@
         b1.disabled = b2.disabled = false;
       } }, 'Brainstorm this topic');
       const end = h('button', { class: 'btn danger', type: 'button', onclick: () => { of.endMeeting(); this.toast('Everyone is heading back to their desks.', '#f2c230'); this.close(); } }, 'Send everyone back');
-      const render = () => { const a = of.meetingArrived(); status.textContent = `${a} of ${m.people.length} seated in ${m.room.replace('_', ' ')}. ${a < m.people.length ? 'People are still walking over.' : 'Everyone is here.'}`; };
+      const render = () => { const a = of.meetingArrived(); status.textContent = `${a} of ${m.people.length} arrived in ${m.room.replace('_', ' ')}. ${a < m.people.length ? 'People are still walking over.' : 'Everyone is here.'}`; };
       this.open('meetingLive', this.hdr(m.room === 'CEO_Office' ? 'In your office' : 'Meeting in progress', m.room === 'CEO_Office' ? `${m.people.length} people called in` : m.room.replace('_', ' ')), h('div', { class: 'body' }, status, h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2)), h('div', { class: 'sect' }, h('h3', {}, 'Transcript'), transcript), h('div', { class: 'row' }, end)), render);
       render();
     }

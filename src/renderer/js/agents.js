@@ -414,8 +414,12 @@
     callMeeting(room, people, topic) {
       if (this.meeting) this.endMeeting();
       const chairs = this.chairs.filter(c => c.room === room && !c.exec).sort((a, b) => a.p[0] - b.p[0] || a.p[2] - b.p[2]);
+      // Keep a chair free for the founder, including when everyone is called.
+      const occupiedByPlayer = this.ctx.player?.seated && this.ctx.player.seat?.room === room ? this.ctx.player.seat : null;
+      const playerSeat = room === 'CEO_Office' ? this.chairs.find(c => c.room === room && c.exec) : occupiedByPlayer || chairs[0];
+      if (room !== 'CEO_Office' && playerSeat) chairs.splice(chairs.indexOf(playerSeat), 1);
       const C = { CEO_Office: [6.4, 31.3], Boardroom: [14, 32.2], Meeting_1: [20, 32.2], Meeting_2: [24, 32.2], Meeting_3: [28, 32.2] }[room] || [chairs[0]?.p[0] || 14, chairs[0]?.p[2] || 32];
-      const m = { room, topic, people: [], phase: 'gathering', speaking: null, t0: this.ctx.time, lines: [] };
+      const m = { room, topic, people: [], playerSeat, phase: 'gathering', speaking: null, t0: this.ctx.time, lines: [] };
       people.forEach((e, i) => {
         e.clear(); e.errand = null; e.interacting = false; e.meeting = m; m.people.push(e);
         const c = chairs[i];
@@ -426,7 +430,10 @@
           if (c) e.push({ type: 'stand' }, { type: 'goto', ...e.approach(c), run: false }, { type: 'sit', seat: c }, { type: 'call', fn: () => { e.arrivedMeeting = true; } });
           else {
             const k = i - chairs.length, a = k * 0.85 + 0.4, r = 1.25 + Math.floor(k / 7) * 0.7;
-            e.push({ type: 'stand' }, { type: 'goto', x: C[0] + Math.cos(a) * r, z: C[1] + Math.sin(a) * r }, { type: 'face', x: C[0], z: C[1] }, { type: 'call', fn: () => { e.arrivedMeeting = true; } });
+            const spot = room === 'Boardroom'
+              ? { x: 12 + (k % 5), z: k % 10 < 5 ? 29.4 - Math.floor(k / 10) * 0.5 : 35 + Math.floor(k / 10) * 0.5 }
+              : { x: C[0] + Math.cos(a) * r, z: C[1] + Math.sin(a) * r };
+            e.push({ type: 'stand' }, { type: 'goto', ...spot }, { type: 'face', x: C[0], z: C[1] }, { type: 'call', fn: () => { e.arrivedMeeting = true; } });
           }
         }, i * 350 + Math.random() * 600);
       });
@@ -468,7 +475,7 @@
       const m = this.meeting; if (!m) return;
       this.meeting = null;
       m.people.forEach((e, i) => {
-        e.meeting = null; e.arrivedMeeting = false; e.clear();
+        e.meeting = null; e.meetSeat = null; e.arrivedMeeting = false; e.clear();
         setTimeout(() => { e.say(pick(['Good meeting.', 'Back to it!', 'Thanks all.', 'Let\'s go.']), 2); e.goDesk(); }, i * 250);
       });
     }

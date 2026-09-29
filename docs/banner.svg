@@ -42,7 +42,7 @@
   <rect x="858" y="268" width="119" height="25" rx="3" fill="#343e32"/>
   <rect x="1000" y="268" width="132" height="25" rx="3" fill="#343e32"/>
   <g fill="#c1cbb8" font-family="Arial,sans-serif" font-size="11" font-weight="bold" letter-spacing="2"><text x="734" y="285">ASSIGN</text><text x="881" y="285">BUILD</text><text x="1017" y="285">REVIEW</text></g>
-  <g transform="translate(55 57)">
+  <g transform="translate(55 45)">
     <path d="M0 0h60c27 0 43 16 43 42v16c0 27-16 43-43 43H0V0zm19 19v63h41c16 0 24-8 24-24V42c0-16-8-23-24-23H19z" fill="#f2c230"/>
     <path d="M20 70h62v12H20z" fill="#171c18"/><circle cx="54" cy="47" r="5" fill="#171c18"/>
   </g>
