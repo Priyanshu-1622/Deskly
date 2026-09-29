@@ -1,0 +1,85 @@
+/* Deskly bridge. In the desktop app this is the secure preload API
+   (window.desklyNative). In a plain browser (development, demos, tests) it
+   falls back to a self-contained demo runtime so every screen still works. */
+(function () {
+  if (window.desklyNative) { window.DK = window.desklyNative; return; }
+
+  const LS = 'deskly.web.';
+  const get = (k, d) => { try { return JSON.parse(localStorage.getItem(LS + k)) ?? d; } catch { return d; } };
+  const put = (k, v) => { try { localStorage.setItem(LS + k, JSON.stringify(v)); } catch { } };
+  const listeners = new Set();
+  const files = new Map(get('files', [['README.md', '# My project\n\nFiles your team writes appear here.\n']]));
+  const tasks = new Map(); const approvals = new Map();
+  let n = 0; const uid = p => p + '_' + Date.now().toString(36) + (n++);
+  const now = () => new Date().toISOString();
+  const pub = t => t && JSON.parse(JSON.stringify(t));
+  const pending = () => [...approvals.values()].filter(a => a.status === 'pending').map(({ res, ...a }) => a);
+  const emit = (type, p = {}) => { const evt = { type, ...p, timestamp: now(), task: p.taskId ? pub(tasks.get(p.taskId)) : undefined, approvals: pending() }; audit.push(evt); listeners.forEach(f => f(evt)); };
+  const audit = [];
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const saveFiles = () => put('files', [...files.entries()]);
+  const cfg = () => get('config', null);
+
+  async function run(t) {
+    const set = (s, x = {}) => { Object.assign(t, x, { status: s, updatedAt: now() }); emit('task.status_changed', { taskId: t.id, employeeId: t.employeeId, status: s }); };
+    const log = x => { t.logs.push({ t: Date.now(), text: x }); emit('task.output', { taskId: t.id, employeeId: t.employeeId, text: x }); };
+    const prog = p => { t.progress = p; emit('task.progress', { taskId: t.id, employeeId: t.employeeId, progress: p }); };
+    set('planning'); log('$ deskly plan · demo'); await wait(1200);
+    t.steps = [{ label: 'Look at the workspace' }, { label: 'Write the deliverable' }, { label: 'Share it with the team', sensitive: true }];
+    t.steps.forEach((s, i) => log(`  ${i + 1}. ${s.label}`)); set('running');
+    t.step = 0; log('▸ Checking what is in the workspace'); prog(0.2); await wait(1800);
+    t.step = 1; log('▸ Writing the demo deliverable'); prog(0.45); await wait(1800);
+    const path = `deskly-output/${t.id}.md`; files.set(path, `# ${t.title}\n\nWritten in browser demo mode.\n`); saveFiles(); t.files.push(path); log(`  ✎ created ${path}`);
+    t.step = 2; log('⏸ Needs approval: Post the summary in the team channel');
+    const a = { id: uid('approval'), taskId: t.id, employeeId: t.employeeId, employeeName: t.employeeName, action: { kind: 'share_externally', summary: 'Post the summary in the team channel', risk: 'low' }, status: 'pending' };
+    approvals.set(a.id, a); set('waiting_for_approval'); emit('approval.required', { approvalId: a.id, taskId: t.id, employeeId: t.employeeId, action: a.action });
+    const ok = await new Promise(r => { a.res = r; });
+    if (t.status === 'cancelled') return;
+    if (!ok) { log('✕ You rejected it'); set('cancelled', { error: 'You rejected the action' }); return; }
+    log('✓ Approved by you'); set('running'); prog(0.8); await wait(1500);
+    set('reviewing'); await wait(800);
+    t.result = { summary: 'Demo run finished — the desktop app does the real work with your API keys.', body: 'This browser build runs a simulated employee. Install the desktop app and add API keys in **Settings → Team** for real work.', files: t.files.slice() };
+    prog(1); set('completed'); emit('task.completed', { taskId: t.id, employeeId: t.employeeId, summary: t.result.summary });
+  }
+
+  window.DK = {
+    native: false,
+    appInfo: async () => ({ version: 'web', platform: 'web', encryption: false, providers: { demo: { label: 'Demo (browser build)', defaultModel: 'demo', needsKey: false }, anthropic: { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-5-5', needsKey: true }, openai: { label: 'OpenAI', defaultModel: 'gpt-4o-mini', needsKey: true } } }),
+    configGet: async () => ({ config: cfg(), keys: get('keys', {}) }),
+    configSave: async c => { put('config', c); return c; },
+    configReset: async () => { localStorage.removeItem(LS + 'config'); localStorage.removeItem(LS + 'keys'); return true; },
+    secretSet: async (id, v) => { const k = get('keys', {}); if (v) k[id] = true; else delete k[id]; put('keys', k); return k; },   // never stores the key in the browser build
+    providerTest: async p => { if (p.provider !== 'demo') throw new Error('Keys can only be tested in the desktop app.'); return { ok: true, ms: 1, sample: 'ready' }; },
+    workspaceChoose: async () => 'Browser workspace',
+    workspaceList: async () => [...files.keys()].sort().map(p => ({ path: p, dir: false })),
+    workspaceRead: async p => { if (!files.has(p)) throw new Error('File not found'); return files.get(p); },
+    workspaceWrite: async (p, c) => { files.set(p, c); saveFiles(); return { path: p, bytes: c.length }; },
+    workspaceOpen: async () => true,
+    terminalRun: async cmd => ({ code: 0, stdout: `(browser build) The terminal runs commands in the desktop app.\n> ${cmd}`, stderr: '' }),
+    tasksSnapshot: async () => ({ tasks: [...tasks.values()].map(pub), approvals: pending() }),
+    tasksCreate: async (employeeId, description) => {
+      const e = (cfg()?.employees || []).find(x => x.id === employeeId);
+      if ([...tasks.values()].some(t => t.employeeId === employeeId && !['completed', 'failed', 'cancelled'].includes(t.status))) throw new Error(`${e?.name} is already working on a task.`);
+      const t = { id: uid('task'), employeeId, employeeName: e?.name, role: e?.role, title: description.slice(0, 60), description, status: 'created', progress: 0, steps: [], step: -1, logs: [], files: [], result: null, createdAt: now(), updatedAt: now() };
+      tasks.set(t.id, t); emit('task.created', { taskId: t.id, employeeId, title: t.title }); run(t); return pub(t);
+    },
+    tasksCancel: async id => { const t = tasks.get(id); if (!t) return; t.status = 'cancelled'; t.error = 'Stopped by you'; for (const a of approvals.values()) if (a.taskId === id && a.status === 'pending') { a.status = 'cancelled'; a.res(false); } emit('task.status_changed', { taskId: id, employeeId: t.employeeId, status: 'cancelled' }); },
+    tasksClear: async () => { for (const [id, t] of tasks) if (['completed', 'failed', 'cancelled'].includes(t.status)) tasks.delete(id); emit('runtime.history_cleared'); },
+    tasksReviewed: async id => { const t = tasks.get(id); if (t) t.reviewed = true; emit('task.reviewed', { taskId: id, employeeId: t?.employeeId }); },
+    approvalRespond: async (id, d) => { const a = approvals.get(id); if (!a || a.status !== 'pending') return false; a.status = d; emit('approval.responded', { approvalId: id, taskId: a.taskId, employeeId: a.employeeId, decision: d }); a.res(d === 'approved'); return true; },
+    memoryList: async id => get('memories', []).filter(m => m.employeeId === id),
+    memoryAdd: async (employeeId, scope, text) => { const all = get('memories', []); const note = { id: uid('memory'), employeeId, scope, text: String(text).slice(0, 700), source: 'founder', createdAt: now() }; all.push(note); put('memories', all); return note; },
+    memoryDelete: async id => { const all = get('memories', []); put('memories', all.filter(m => m.id !== id)); return true; },
+    teamUpdates: async () => [],
+    usageGet: async () => [],
+    auditList: async () => audit.filter(e => !['task.progress', 'task.output'].includes(e.type)).map(({ task, approvals, ...e }) => e),
+    auditExport: async () => null,
+    employeeReply: async (id, ctx) => `(demo) I'm ${ctx}. In the desktop app with an API key I'd give you a real answer.`,
+    meetingIdeas: async (topic, people) => people.map(p => ({ id: p.id, line: `(demo) From ${p.role}: I'd look at how "${topic}" changes my current work.` })),
+    assistantChat: async () => 'This is the browser build, so your assistant is offline. In the desktop app it uses the provider and key from Settings → Your assistant.',
+    shellExternal: async url => { window.open(url, '_blank'); return true; },
+    appFullscreen: async () => { try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch { } return !!document.fullscreenElement; },
+    appQuit: async () => { location.reload(); },
+    onRuntimeEvent: fn => { listeners.add(fn); return () => listeners.delete(fn); }
+  };
+})();

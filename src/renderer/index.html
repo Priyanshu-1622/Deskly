@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deskly</title>
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="stage"></div>
+<div id="hud" hidden>
+  <div id="tags"></div>
+  <div id="clock" class="hud glass"><b id="clockT">08:52</b><span id="clockD">Monday</span></div>
+  <div id="provider" class="hud glass"><i></i><span></span></div>
+  <div id="counters" class="hud"></div>
+  <div id="cross" class="hud" hidden></div>
+  <div id="prompt" class="hud glass" hidden></div>
+  <div id="toasts" class="hud"></div>
+  <div id="minimap" class="hud glass"><canvas id="mm" width="480" height="288"></canvas></div>
+  <div id="joy" class="hud" hidden><b></b></div>
+  <div id="tbtns" class="hud" hidden><button id="tBoard" type="button">Board</button><button id="tRun" type="button">Walk</button><button id="tAct" type="button">Talk</button></div>
+</div>
+<div id="seatbar" class="hud" hidden><span><kbd>L</kbd> Laptop</span><span><kbd>C</kbd> Call people</span><span><kbd>Tab</kbd> Board</span><span><kbd>W</kbd> Stand up</span></div>
+<aside id="panel" class="glass" hidden></aside>
+
+<div id="screen-start" class="screen" hidden></div>
+<div id="screen-setup" class="screen" hidden></div>
+<div id="screen-settings" class="screen" hidden></div>
+<div id="screen-pause" class="screen" hidden></div>
+<div id="screen-laptop" class="screen" hidden></div>
+
+<div id="boot"><div class="b"><div class="brand"><div class="logo"><span>D</span></div><div><h1>Deskly</h1></div></div><div class="track"><div id="bootBar"></div></div><p id="bootMsg">Starting…</p></div></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/BufferGeometryUtils.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/role-prompts.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/runtime-client.js"></script>
+<script src="js/human.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/world.js"></script>
+<script src="js/agents.js"></script>
+<script src="js/player.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/screens.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

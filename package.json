@@ -1,0 +1,34 @@
+{
+  "name": "deskly",
+  "productName": "Deskly",
+  "version": "0.1.0",
+  "description": "A first-person 3D office where AI employees do real work on your projects.",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "author": "Priyanshu Patel",
+  "repository": { "type": "git", "url": "https://github.com/Priyanshu-1622/Deskly.git" },
+  "keywords": ["ai-agents", "electron", "threejs", "productivity", "first-person", "llm"],
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "dev.deskly.app",
+    "productName": "Deskly",
+    "files": ["src/**/*", "package.json"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "mac": { "target": ["dmg"], "category": "public.app-category.productivity" },
+    "linux": { "target": ["AppImage"], "category": "Office" }
+  }
+}
