@@ -3,7 +3,7 @@
 const PROVIDERS = {
   anthropic: { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-5-5', needsKey: true },
   openai: { label: 'OpenAI', defaultModel: 'gpt-4o-mini', needsKey: true, baseUrl: 'https://api.openai.com/v1' },
-  gemini: { label: 'Google Gemini', defaultModel: 'gemini-2.5-flash', needsKey: true, baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
+  gemini: { label: 'Google Gemini', defaultModel: 'gemini-3.5-flash-lite', needsKey: true, baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
   openrouter: { label: 'OpenRouter', defaultModel: 'anthropic/claude-sonnet-4.5', needsKey: true, baseUrl: 'https://openrouter.ai/api/v1' },
   ollama: { label: 'Ollama (local)', defaultModel: 'llama3.1', needsKey: false, baseUrl: 'http://localhost:11434/v1' },
   custom: { label: 'OpenAI-compatible (custom URL)', defaultModel: '', needsKey: false },
@@ -27,7 +27,10 @@ async function httpJSON(url, opts, signal) {
   if (!res.ok) {
     const msg = body?.error?.message || body?.message || text.slice(0, 200);
     const code = res.status === 401 || res.status === 403 ? 'auth' : res.status === 429 ? 'rate_limited' : res.status === 404 ? 'not_found' : 'upstream';
-    const human = { auth: 'The API key was rejected. Update it in Settings → Team.', rate_limited: 'The provider is rate limiting this key. Try again in a minute.', not_found: `Model or endpoint not found: ${msg}` }[code] || `Provider error (${res.status}): ${msg}`;
+    const geminiModel = url.includes('generativelanguage.googleapis.com') && code === 'not_found';
+    const human = geminiModel
+      ? `Gemini could not find or access this model. In Settings, set Model to gemini-3.5-flash-lite and test again. Google limits access to some older 2.5 models. Details: ${msg}`
+      : ({ auth: 'The API key was rejected. Update it in Settings → Team.', rate_limited: 'The provider is rate limiting this key. Try again in a minute.', not_found: `Model or endpoint not found: ${msg}` }[code] || `Provider error (${res.status}): ${msg}`);
     throw new ProviderError(human, code);
   }
   return body;
@@ -95,7 +98,8 @@ function demoReply(system, messages) {
 
 async function testProfile(profile) {
   const t0 = Date.now();
-  const text = await chat(profile, { system: 'Reply with the single word: ready', messages: [{ role: 'user', content: 'Say ready.' }], maxTokens: 16 });
+  const text = await chat(profile, { system: 'Reply with the single word: ready', messages: [{ role: 'user', content: 'Say ready.' }], maxTokens: 256 });
+  if (!text.trim()) throw new ProviderError('The provider returned no text. Try another model or test again.', 'empty_response');
   return { ok: true, ms: Date.now() - t0, sample: text.slice(0, 40) };
 }
 

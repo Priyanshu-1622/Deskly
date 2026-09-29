@@ -6,6 +6,7 @@ const { chat, parseJSON } = require('./providers');
 const { Workspace } = require('./workspace');
 const { TeamContext } = require('./team-context');
 const { forRole } = require('../../renderer/js/role-prompts');
+const { forEmployee: resumeFor } = require('../../renderer/js/resumes');
 
 const ACTIVE = new Set(['created', 'queued', 'planning', 'running', 'waiting_for_approval', 'reviewing']);
 let seq = 0;
@@ -32,7 +33,8 @@ class Runtime {
   workspace() { return new Workspace(this.getConfig()?.workspace); }
   employee(id) { return (this.getConfig()?.employees || []).find(e => e.id === id); }
   rolePrompt(emp, cfg) {
-    return `You are ${emp.name}, ${emp.role} at ${cfg.company || 'the company'}. Your working style: ${emp.persona || 'Professional and concise.'}\nYour responsibilities: ${emp.scope || emp.role}.\nRole playbook:\n${String(emp.instructions || forRole(emp.role)).slice(0, 5000)}\nCoordinate through precise project updates. Distinguish confirmed facts from assumptions. You may make small, relevant improvements, but explain them and respect the founder's stated goal.`;
+    const resume = resumeFor(emp);
+    return `You are ${emp.name}, ${emp.role} at ${cfg.company || 'the company'}. Your working style: ${emp.persona || 'Professional and concise.'}\nYour responsibilities: ${emp.scope || emp.role}.\nYour practical résumé (use only these as starting capabilities, and verify project facts):\nSkills: ${resume.skills.join(', ') || 'not specified'}\nKnowledge: ${resume.knowledge.join(', ') || 'not specified'}\nTools and methods: ${resume.tools.join(', ') || 'not specified'}\nRole playbook:\n${String(emp.instructions || forRole(emp.role)).slice(0, 5000)}\nCoordinate through precise project updates. Distinguish confirmed facts from assumptions. You may make small, relevant improvements, but explain them and respect the founder's stated goal.`;
   }
   contextFor(emp, cfg, task) {
     const notes = this.team.memoriesFor(emp.id, cfg.workspace, 8, task?.description || '').map(m => `- [${m.scope}] ${m.text.slice(0, 400)}`).join('\n');

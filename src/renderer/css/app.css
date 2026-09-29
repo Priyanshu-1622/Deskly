@@ -16,8 +16,11 @@ body.no-tags #tags{display:none}
 #screen-start{display:grid;grid-template-columns:minmax(360px,440px) 1fr;background:linear-gradient(90deg,rgba(29,33,27,.94) 0,rgba(29,33,27,.86) 440px,rgba(29,33,27,.15) 70%,rgba(29,33,27,0))}
 .start-left{padding:48px 40px 28px;display:flex;flex-direction:column;gap:36px;min-width:0}
 .brand{display:flex;gap:14px;align-items:center}
-.logo{width:52px;height:52px;border-radius:var(--r);background:var(--accent);display:grid;place-items:center;box-shadow:0 8px 30px rgba(242,194,48,.25)}
-.logo span{font-weight:900;font-size:26px;color:var(--on-accent)}
+.logo,.deskly-mark{width:52px;height:52px;object-fit:contain;flex:none;display:block}
+.deskly-mark.small{width:23px;height:23px}
+.app-heading{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:.03em}
+.app-heading .deskly-mark{width:30px;height:30px}
+.app-heading small{font-size:11px;color:var(--dim);margin-left:auto;text-transform:uppercase;letter-spacing:.1em}
 .brand h1{margin:0;font-size:30px;letter-spacing:-.02em}
 .brand p{margin:2px 0 0;color:var(--dim);font-size:14px}
 .menu{display:flex;flex-direction:column;gap:8px}
@@ -89,7 +92,8 @@ code.path{font-family:var(--mono);font-size:12.5px;background:#141711;border:1px
 /* settings */
 .settings{display:grid;grid-template-columns:230px 1fr;min-height:100%}
 .settings aside{border-right:1px solid var(--line);padding:28px 14px;display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,.02)}
-.settings aside h2{margin:0 10px 14px;font-size:20px}
+.settings aside h2{margin:14px 10px 14px;font-size:20px}
+.settings aside .app-heading{padding:0 10px 16px;border-bottom:1px solid var(--line)}
 .settings aside button{text-align:left;background:none;border:0;border-radius:var(--r);padding:10px 12px;font-size:14px;color:#cfccbb}
 .settings aside button.on{background:rgba(242,194,48,.12);color:var(--text);font-weight:700}
 .settings section{padding:24px 32px;display:flex;flex-direction:column;gap:18px;min-width:0}
@@ -151,8 +155,7 @@ h1,h2{font-weight:600;letter-spacing:.005em}
 .card{border-radius:var(--r);background:rgba(0,0,0,.14)}
 .chip{border-radius:2px;text-transform:uppercase;letter-spacing:.06em;font-size:10.5px;background:rgba(0,0,0,.25)}
 .avatar,.face{border-radius:2px!important}
-.logo{border-radius:2px;background:var(--accent);box-shadow:none}
-.logo span{color:var(--on-accent);font-family:var(--display)}
+.logo{border-radius:2px;background:none;box-shadow:none}
 .brand h1{text-transform:uppercase;letter-spacing:.06em;font-size:32px}
 #screen-start{background:linear-gradient(90deg,rgba(29,33,27,.97) 0,rgba(29,33,27,.9) 440px,rgba(29,33,27,.2) 70%,rgba(29,33,27,0))}
 .glance{border-radius:var(--r);border-top:3px solid var(--accent);background:var(--glass)}

@@ -29,6 +29,7 @@
   boot(1, 'Ready');
   const nav = new DesklyNav(data.grid);
   const player = new DesklyPlayer(camera, renderer.domElement, nav);
+  renderer.domElement.tabIndex = 0;
   Object.assign(app, { nav, player, data });
   const bus = new DesklyRuntime.EventBus();
   const audit = { entries: [] };
@@ -48,7 +49,7 @@
     document.body.classList.toggle('no-tags', !st.nameTags);
     if (app.office && screens.cfg && app.teamSig !== teamSig(screens.cfg)) rebuildTeam();
   };
-  const teamSig = c => JSON.stringify((c.employees || []).map(e => [e.id, e.name, e.dept, e.role, e.look, e.provider, e.model]));
+  const teamSig = c => JSON.stringify((c.employees || []).map(e => [e.id, e.name, e.dept, e.role, e.look, e.provider, e.model, e.resume]));
 
   /* ---------- the office ---------- */
   const M = data.markers;
@@ -173,18 +174,25 @@
   };
   app.resume = () => {
     screens.show(null); app.playing = true; player.enabled = true; $('#cross').hidden = false;
+    renderer.domElement.focus();
     try { const r = renderer.domElement.requestPointerLock?.(); r?.catch?.(() => { }); } catch { }
   };
   app.pause = () => { app.playing = false; player.enabled = false; player.releaseLock(); ui.close(); screens.pause(); };
   app.openLaptop = path => { app.playing = false; player.enabled = false; player.releaseLock(); ui.close(); screens.laptop(path); };
   document.addEventListener('pointerlockchange', () => {
-    // leaving pointer lock with Esc (browser default) pauses, unless a panel took over
-    if (!document.pointerLockElement && app.playing && !ui.panelKind && app._lockedOnce) app.pause();
-    if (document.pointerLockElement) app._lockedOnce = true;
+    $('#control-hint').hidden = !app.playing || !!document.pointerLockElement || player.touch;
+  });
+  $('#control-hint').addEventListener('click', () => {
+    renderer.domElement.focus();
+    renderer.domElement.requestPointerLock?.()?.catch?.(() => { });
   });
   addEventListener('keydown', e => {
+    if (e.defaultPrevented) return;
+    if ((e.ctrlKey || e.metaKey) && e.code === 'Comma') { e.preventDefault(); if (screens.cfg) { if (app.playing) app.pause(); screens.openSettings('general'); } return; }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyO') { e.preventDefault(); if (screens.cfg) DK.workspaceOpen().catch(err => screens.flash(err.message)); return; }
     if (e.target.closest && e.target.closest('input,textarea,select')) return;
-    if (!app.playing && e.code === 'Escape' && document.body.dataset.screen === 'screen-laptop') screens.closeLaptop();
+    if (app.playing && e.code === 'Escape') { e.preventDefault(); app.pause(); }
+    else if (!app.playing && e.code === 'Escape' && document.body.dataset.screen === 'screen-laptop') screens.closeLaptop();
     else if (!app.playing && e.code === 'Escape' && document.body.dataset.screen === 'screen-pause') app.resume();
     else if (app.playing && e.code === 'KeyL' && !ui.panelKind) app.openLaptop();
   });
@@ -208,6 +216,7 @@
     world.update(dt, app.office ? [player.pos, ...app.office.employees.filter(e => e.present).map(e => e.pos)] : []);
     if (app.playing) { focus = findFocus(); ui.prompt(promptFor(focus)); } else ui.prompt(null);
     $('#hud').hidden = !app.playing; $('#seatbar').hidden = !(app.playing && player.seated);
+    $('#control-hint').hidden = !app.playing || player.locked || player.touch;
     if (app.office && app.playing) ui.tagsUpdate(camera); else $('#tags').replaceChildren(), ui.tags?.clear?.();
     hudT -= dt; mmT -= dt; panelT -= dt;
     if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clock); drawCeo(); }

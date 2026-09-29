@@ -196,12 +196,30 @@
       this.panelEmp = null; this.panelKind = null; this.onRender = null;
       $('#panel').hidden = true;
       if (this.app.player.touch) { $('#joy').hidden = false; $('#tbtns').hidden = false; }
+      if (this.app.playing) {
+        // The task textarea can stay focused after its panel is hidden. That
+        // makes Player ignore WASD, so return focus to the office canvas.
+        document.activeElement?.blur?.();
+        const canvas = this.app.renderer.domElement;
+        canvas.focus({ preventScroll: true });
+        if (!this.app.player.touch) {
+          try { canvas.requestPointerLock?.()?.catch?.(() => { }); } catch { }
+        }
+      }
     }
     hdr(title, sub, lead) {
       return h('header', {}, lead || null, h('div', { class: 'who' }, h('h2', {}, title), sub ? h('p', {}, sub) : null),
         h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => this.close() }, '✕'));
     }
-    tick() { if (this.onRender) this.onRender(); }
+    tick() {
+      if (!this.onRender) return;
+      try { this.onRender(); }
+      catch (error) {
+        console.error('Deskly panel update failed', error);
+        this.onRender = null;
+        this.toast('This panel could not update. Close and reopen it.', '#e0504a');
+      }
+    }
 
     /* ---------------- employee conversation ---------------- */
     openEmployee(e) {
@@ -211,6 +229,11 @@
       if (e.state === 'AVAILABLE') e.setState('INTERACTING');
       e.say(e.state === 'WAITING_FOR_APPROVAL' ? 'Here\'s what I need you to OK.' : e.state === 'COMPLETED' ? 'Here\'s what I made.' : ['Hi! What can I do for you?', 'Sure — what do you need?', 'Hey boss, what\'s up?'][Math.floor(Math.random() * 3)], 3);
       const S = () => DesklyAgents.STATUS[e.state];
+      const resume = DesklyResumes.forEmployee(e);
+      const resumeCard = h('div', { class: 'card employee-resume' }, h('h3', {}, 'Skills & knowledge'),
+        ...[['skills', 'Skills'], ['knowledge', 'Knowledge'], ['tools', 'Tools & methods']].map(([key, label]) =>
+          h('div', { class: 'resume-row' }, h('b', {}, label), h('div', { class: 'resume-tags' },
+            ...(resume[key].length ? resume[key].map(item => h('span', {}, item)) : [h('small', {}, 'Not set yet')])))));
       const provLabel = e.provider && e.provider !== 'demo' ? `${e.provider}${e.model ? ' · ' + e.model : ''}` : 'demo mode';
       const chip = h('span', { class: 'chip' });
       const activity = h('p', {});
@@ -250,7 +273,7 @@
         h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'office'); this.close(); } }, 'Wait in my office'),
         h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'desk'); this.close(); } }, 'Back to your desk'),
         h('button', { class: 'btn', type: 'button', onclick: () => this.openMeeting([e.dept]) }, 'Call a meeting'));
-      const body = h('div', { class: 'body' }, e.provider === 'demo' || !e.provider ? h('div', { class: 'card amber' }, h('div', { class: 'note', style: 'color:#f3d9a6' }, `${fname(e.name)} is in demo mode, so work is simulated. Give them a provider and API key in Settings → Team.`)) : '', taskBox,
+      const body = h('div', { class: 'body' }, e.provider === 'demo' || !e.provider ? h('div', { class: 'card amber' }, h('div', { class: 'note', style: 'color:#f3d9a6' }, `${fname(e.name)} is in demo mode, so work is simulated. Give them a provider and API key in Settings → Team.`)) : '', resumeCard, taskBox,
         h('div', { class: 'sect' }, h('h3', {}, 'Give work'), ta, h('div', { class: 'row' }, assignBtn, askBtn), chatBox, h('h3', { style: 'margin-top:4px' }, 'Ideas for ' + e.role.toLowerCase()), ideas),
         h('div', { class: 'sect' }, h('h3', {}, 'Ask in person'), orders),
         h('p', { class: 'note' }, `Scope: ${e.scope}. ${fname(e.name)} works inside your project folder. Commands and anything that leaves the company always stop for your approval.`));
@@ -258,7 +281,7 @@
       const render = (force) => {
         const s = S(); chip.replaceChildren(h('i', { style: `background:${s.color}` }), s.label); activity.textContent = e.activity;
         const t = rt.activeFor(e.id) || rt.latestFor(e.id);
-        const key = t ? `${t.id}|${t.status}|${Math.round(t.progress * 50)}|${t.logs.length}|${t.output.length >> 6}|${t.reviewed}` : 'none';
+        const key = t ? `${t.id}|${t.status}|${Math.round(t.progress * 50)}|${t.logs.length}|${t.reviewed}` : 'none';
         if (key === lastKey && !force) return; lastKey = key;
         taskBox.replaceChildren(...this.taskCard(t, e));
       };
@@ -286,7 +309,6 @@
             h('button', { class: 'btn danger', type: 'button', onclick: () => { rt.respondApproval(a.id, 'rejected'); } }, 'Reject'))));
       }
       if (DesklyRuntime.ACTIVE.has(t.status)) {
-        if (t.output && t.status !== 'waiting_for_approval') card.append(h('div', { class: 'note' }, `Writing the deliverable · ${t.output.length.toLocaleString()} characters so far`));
         const log = h('pre', { class: 'log' }, t.logs.slice(-10).map(l => l.text).join('\n'));
         card.append(log); setTimeout(() => { log.scrollTop = 1e6; });
         card.append(h('div', { class: 'row' }, h('button', { class: 'btn danger', type: 'button', onclick: () => rt.cancel(t.id) }, 'Stop task')));

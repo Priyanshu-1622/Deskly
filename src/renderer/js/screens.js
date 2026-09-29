@@ -21,6 +21,7 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   const initials = n => String(n || '?').replace(/^Dr\.\s*/, '').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('small', {}, hint) : null);
+  const mark = (extra = '') => h('img', { class: `deskly-mark ${extra}`.trim(), src: 'assets/deskly-icon.png', alt: '' });
 
   const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'high', nameTags: true };
 
@@ -58,7 +59,7 @@
         h('button', { class: 'mbtn ghost', type: 'button', onclick: () => DK.appQuit() }, h('b', {}, 'Quit')));
       s.replaceChildren(
         h('div', { class: 'start-left' },
-          h('div', { class: 'brand' }, h('div', { class: 'logo' }, h('span', {}, 'D')), h('div', {}, h('h1', {}, 'Deskly'), h('p', {}, 'Your AI company, in a real office.'))),
+          h('div', { class: 'brand' }, mark(), h('div', {}, h('h1', {}, 'Deskly'), h('p', {}, 'Your AI company, in a real office.'))),
           menu,
           h('footer', {}, h('span', {}, this.info.version === 'web' ? 'Browser preview' : `v${this.info.version}`), h('span', {}, this.info.encryption ? 'API keys encrypted with your OS keychain' : (DK.native ? 'Secure key storage unavailable — API keys cannot be saved' : 'Keys and real work need the desktop app')),
             h('a', { href: '#', onclick: e => { e.preventDefault(); DK.shellExternal('https://github.com/Priyanshu-1622/Deskly'); } }, 'Open source on GitHub'))),
@@ -119,7 +120,7 @@
             try { await this.persist(draft); this.app.enterOffice(true); }
             catch (e) { this.flash(e.message || 'Could not save setup.'); }
           } }, step === steps.length - 1 ? 'Enter the office' : 'Continue'));
-        s.replaceChildren(h('div', { class: 'wizard' }, bar, body, nav));
+        s.replaceChildren(h('div', { class: 'wizard' }, h('div', { class: 'app-heading' }, mark(), h('span', {}, 'Deskly'), h('small', {}, 'Office setup')), bar, body, nav));
         s.querySelectorAll('input[type=text]').forEach(i => i.addEventListener('input', () => { if (step === 0) nav.lastChild.disabled = !(draft.founder.trim() && draft.company.trim()); }));
       };
       this.show('screen-setup'); render();
@@ -144,19 +145,36 @@
         wrap.replaceChildren(...[
           h('div', { class: 'grid2' },
             field('Provider', h('select', { onchange: e => { o.provider = e.target.value; o.model = ''; render(); } }, ...Object.entries(provs).map(([k, v]) => h('option', { value: k, selected: k === (o.provider || 'demo') }, v.label)))),
-            field('Model', h('input', { type: 'text', value: o.model || '', placeholder: p.defaultModel || 'model name', oninput: e => { o.model = e.target.value.trim(); } }))),
+            field('Model', h('input', { type: 'text', value: o.model || '', placeholder: p.defaultModel || 'model name', oninput: e => { o.model = e.target.value.trim(); } }), o.provider === 'gemini' ? 'Recommended for new free-tier projects: gemini-3.5-flash-lite. Clear this field to use the default.' : null)),
           o.provider && o.provider !== 'demo' ? field('Lightweight model (optional)', h('input', { type: 'text', value: o.lightweightModel || '', placeholder: 'Same provider, smaller model', oninput: e => { o.lightweightModel = e.target.value.trim(); } }), 'Used for plans, short conversations and meeting ideas. The main model handles task execution; failures fall back to it.') : null,
           ['custom', 'ollama'].includes(o.provider) ? field('Base URL', h('input', { type: 'text', value: o.baseUrl || '', placeholder: p.baseUrl || 'https://your-endpoint/v1', oninput: e => { o.baseUrl = e.target.value.trim(); } })) : null,
           o.provider && o.provider !== 'demo' ? h('div', { class: 'grid2' },
-            field('API key', keyInput, hasKey ? 'A key is saved. Leave empty to keep it.' : null),
+            field('API key', keyInput, hasKey ? 'A key is saved. Leave empty to keep it.' : 'Save key & test stores it securely, including when the model test fails.'),
             id !== 'assistant' ? field('Or reuse a key', h('select', { onchange: e => { o.keyFrom = e.target.value || undefined; } }, ...others.map(([v, l]) => h('option', { value: v, selected: (o.keyFrom || '') === v }, l)))) : h('span')) : h('p', { class: 'note' }, 'Demo mode simulates the whole flow without calling any AI.'),
           h('div', { class: 'row' },
             o.provider && o.provider !== 'demo' ? h('button', { class: 'btn', type: 'button', onclick: async () => {
               status.textContent = 'Testing…'; status.className = 'test';
-              try { const r = await DK.providerTest({ ...o, apiKey: this.pendingKeys[id] || '' }, id); status.textContent = `Connected · ${r.ms} ms`; status.className = 'test ok'; }
+              let saved = false;
+              try {
+                if (this.pendingKeys[id]) {
+                  this.keys = await DK.secretSet(id, this.pendingKeys[id]);
+                  delete this.pendingKeys[id];
+                  keyInput.value = '';
+                  keyInput.placeholder = '•••••••• saved — type to replace';
+                  saved = true;
+                }
+                const r = await DK.providerTest({ ...o, apiKey: '' }, id);
+                status.textContent = `${saved ? 'Key saved · ' : ''}Connected · ${r.ms} ms`;
+                status.className = 'test ok';
+              } catch (e) {
+                status.textContent = `${saved ? 'Key saved securely · ' : ''}${e.message}`;
+                status.className = 'test bad';
+              }
+            } }, 'Save key & test connection') : null,
+            hasKey ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
+              try { this.keys = await DK.secretSet(id, ''); delete this.pendingKeys[id]; render(); }
               catch (e) { status.textContent = e.message; status.className = 'test bad'; }
-            } }, 'Test connection') : null,
-            hasKey ? h('button', { class: 'btn ghost', type: 'button', onclick: () => { this.pendingKeys[id] = ''; render(); } }, 'Remove saved key') : null,
+            } }, 'Delete saved key') : null,
             status)].filter(Boolean));
       };
       render();
@@ -197,12 +215,16 @@
               h('h3', {}, 'Profile'),
               h('div', { class: 'grid2' },
                 field('Name', h('input', { type: 'text', value: e.name, oninput: ev => { e.name = ev.target.value; renderList(); } })),
-                field('Role', h('select', { onchange: ev => { const r = R[ev.target.value]; Object.assign(e, { role: r.role, dept: r.dept, scope: r.scope, persona: r.persona, instructions: r.instructions, tasks: r.tasks.slice() }); renderList(); renderEdit(); } }, ...Object.keys(R).map(r => h('option', { value: r, selected: r === e.role }, r))))),
+                field('Role', h('select', { onchange: ev => { const r = R[ev.target.value]; Object.assign(e, { role: r.role, dept: r.dept, scope: r.scope, persona: r.persona, resume: DesklyResumes.forRole(r.role), instructions: r.instructions, tasks: r.tasks.slice() }); renderList(); renderEdit(); } }, ...Object.keys(R).map(r => h('option', { value: r, selected: r === e.role }, r))))),
               h('div', { class: 'grid2' },
                 field('Department (desk area)', h('select', { onchange: ev => { e.dept = ev.target.value; renderList(); } }, ...Object.keys(D).map(d => h('option', { value: d, selected: d === e.dept }, d)))),
                 field('Job title', h('input', { type: 'text', value: e.role, oninput: ev => { e.role = ev.target.value; renderList(); } }))),
               field('What they do', h('input', { type: 'text', value: e.scope || '', oninput: ev => { e.scope = ev.target.value; } })),
               field('Personality', h('textarea', { rows: 2, oninput: ev => { e.persona = ev.target.value; } }, e.persona || '')),
+              h('h3', {}, 'Résumé · skills and knowledge'),
+              ...['skills', 'knowledge', 'tools'].map(key => field({ skills: 'Skills', knowledge: 'Domain knowledge', tools: 'Tools and methods' }[key],
+                h('textarea', { rows: 2, oninput: ev => { e.resume = e.resume || DesklyResumes.forRole(e.role); e.resume[key] = DesklyResumes.clean(ev.target.value); } }, DesklyResumes.forEmployee(e)[key].join(', ')),
+                'Separate items with commas or new lines. This résumé is shown in the office and guides the AI.')),
               field('Work instructions', h('textarea', { rows: 8, oninput: ev => { e.instructions = ev.target.value; } }, e.instructions || DesklyRolePrompts.forRole(e.role)), 'Editable playbook used for tasks, conversations and meetings.'),
               h('button', { class: 'btn ghost', type: 'button', onclick: () => { e.instructions = DesklyRolePrompts.forRole(e.role); renderEdit(); } }, 'Restore role playbook'),
               h('h3', {}, 'AI brain'), this.aiFields(e, e.id, draft),
@@ -291,7 +313,7 @@
             ev.target.dataset.sure = 1; ev.target.textContent = 'Click again to erase settings and keys';
           } }, 'Reset Deskly'));
         s.replaceChildren(h('div', { class: 'settings' },
-          h('aside', {}, h('h2', {}, 'Settings'), ...Object.entries(tabs).map(([k, l]) => h('button', { type: 'button', class: k === cur ? 'on' : '', onclick: () => { cur = k; render(); } }, l))),
+          h('aside', {}, h('div', { class: 'app-heading' }, mark(), h('span', {}, 'Deskly')), h('h2', {}, 'Settings'), ...Object.entries(tabs).map(([k, l]) => h('button', { type: 'button', class: k === cur ? 'on' : '', onclick: () => { cur = k; render(); } }, l))),
           h('section', {}, h('div', { class: 'shead' }, h('h2', {}, tabs[cur]),
             h('div', { class: 'row' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => this.closeSettings(false) }, 'Cancel'),
               h('button', { class: 'btn primary', type: 'button', id: 'saveSettings', onclick: async () => { try { await this.persist(draft); this.closeSettings(true); } catch (e) { this.flash(e.message || 'Could not save settings.'); } } }, 'Save'))), body)));
@@ -346,7 +368,7 @@
     /* =============================== PAUSE =============================== */
     pause() {
       const s = $('#screen-pause');
-      s.replaceChildren(h('div', { class: 'pausebox' }, h('h2', {}, 'Paused'), h('p', {}, `${this.cfg.company} · ${new Date(this.app.clock).toTimeString().slice(0, 5)}`),
+      s.replaceChildren(h('div', { class: 'pausebox' }, h('div', { class: 'app-heading' }, mark(), h('span', {}, 'Deskly')), h('h2', {}, 'Paused'), h('p', {}, `${this.cfg.company} · ${new Date(this.app.clock).toTimeString().slice(0, 5)}`),
         h('button', { class: 'mbtn primary', type: 'button', onclick: () => this.app.resume() }, h('b', {}, 'Resume')),
         h('button', { class: 'mbtn', type: 'button', onclick: () => this.app.openLaptop() }, h('b', {}, 'Open your laptop')),
         h('button', { class: 'mbtn', type: 'button', onclick: () => { this.app.resume(); setTimeout(() => this.app.ui.openMeeting(), 60); } }, h('b', {}, 'Call people')),
@@ -429,7 +451,7 @@
       }));
       renderTeam(); this.lapTimer = setInterval(() => { if (!s.hidden) renderTeam(); }, 1500);
       s.replaceChildren(h('div', { class: 'laptop' },
-        h('div', { class: 'lbar' }, h('b', {}, `${this.cfg.founder || 'Your'}'s laptop`), h('span', {}, this.cfg.workspace || ''),
+        h('div', { class: 'lbar' }, mark('small'), h('b', {}, `${this.cfg.founder || 'Your'}'s laptop`), h('span', {}, this.cfg.workspace || ''),
           h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => { this.closeLaptop(); if (this.app.exec !== false) this.app.sit?.(); setTimeout(() => this.app.ui.openMeeting(null, 'CEO_Office'), 60); } }, 'Call people to my office'), h('button', { class: 'btn', type: 'button', onclick: () => DK.workspaceOpen() }, 'Open folder'), h('button', { class: 'btn primary', type: 'button', onclick: () => this.closeLaptop() }, 'Close laptop · Esc'))),
         h('div', { class: 'lgrid' },
           h('div', { class: 'lcol' }, h('div', { class: 'lhead' }, 'Project', h('button', { class: 'mini', type: 'button', title: 'Refresh', onclick: loadTree }, '↻')), tree,

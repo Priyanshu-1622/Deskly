@@ -6,7 +6,26 @@ const { Workspace } = require('../src/main/runtime/workspace');
 const { Store } = require('../src/main/store');
 const { TeamContext } = require('../src/main/runtime/team-context');
 const { forRole } = require('../src/renderer/js/role-prompts');
-const { parseJSON } = require('../src/main/runtime/providers');
+const { forRole: resumeForRole, forEmployee: resumeForEmployee } = require('../src/renderer/js/resumes');
+const { parseJSON, chat, PROVIDERS } = require('../src/main/runtime/providers');
+
+test('Gemini uses a current free-tier model and its documented compatibility endpoint', async t => {
+  assert.equal(PROVIDERS.gemini.defaultModel, 'gemini-3.5-flash-lite');
+  let request;
+  t.mock.method(globalThis, 'fetch', async (url, opts) => {
+    request = { url, opts };
+    return new Response(JSON.stringify({ choices: [{ message: { content: 'ready' } }] }), { status: 200 });
+  });
+  const answer = await chat({ provider: 'gemini', apiKey: 'test-key' }, { system: 'Be brief.', messages: [{ role: 'user', content: 'Hello' }] });
+  assert.equal(answer, 'ready');
+  assert.equal(request.url, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+  assert.equal(JSON.parse(request.opts.body).model, 'gemini-3.5-flash-lite');
+});
+
+test('Gemini model 404 explains how to change the saved model', async t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ error: { message: 'Model not found' } }), { status: 404 }));
+  await assert.rejects(chat({ provider: 'gemini', model: 'gemini-2.5-flash', apiKey: 'test-key' }, { system: '', messages: [] }), /set Model to gemini-3\.5-flash-lite/);
+});
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'deskly-'));
 
@@ -59,9 +78,10 @@ test('API keys round-trip through secure storage only', () => {
     encryptString: value => Buffer.from('encrypted:' + value),
     decryptString: value => value.toString().replace(/^encrypted:/, '')
   };
-  const store = new Store(tmp(), safe);
+  const dir = tmp(), store = new Store(dir, safe);
   store.setSecret('employee', 'private-key');
   assert.equal(store.getSecret('employee'), 'private-key');
+  assert.equal(new Store(dir, safe).getSecret('employee'), 'private-key');
   assert.deepEqual(store.hasSecrets(), { employee: true });
   assert.equal(fs.readFileSync(store.secPath, 'utf8').includes('private-key'), false);
 });
@@ -79,6 +99,19 @@ test('role instructions are specific and can be replaced per employee', () => {
   const rt = new Runtime({ dataDir: tmp(), getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: () => {} });
   assert.match(rt.systemPrompt(cfg.employees[0], cfg), /Follow our design tokens exactly/);
   assert.doesNotMatch(rt.systemPrompt(cfg.employees[0], cfg), /keyboard and screen-reader/);
+});
+
+test('employee résumé defaults and edits reach the AI instructions', () => {
+  assert.ok(resumeForRole('Developer').skills.includes('Debugging'));
+  const emp = { id: 'e1', name: 'Lena', role: 'Frontend Developer', resume: { skills: ['Motion design'], knowledge: ['WCAG'], tools: ['CSS'] } };
+  assert.deepEqual(resumeForEmployee(emp).skills, ['Motion design']);
+  const cfg = { company: 'Example', workspace: tmp(), employees: [emp] };
+  const rt = new Runtime({ dataDir: tmp(), getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: () => {} });
+  const prompt = rt.rolePrompt(emp, cfg);
+  assert.match(prompt, /Skills: Motion design/);
+  assert.match(prompt, /Knowledge: WCAG/);
+  assert.match(prompt, /Tools and methods: CSS/);
+  assert.ok(resumeForEmployee({ role: 'Developer' }).knowledge.length > 0);
 });
 
 test('memory is scoped by employee and project, while approved global notes travel', () => {

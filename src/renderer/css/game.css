@@ -20,6 +20,7 @@ button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px soli
 .glass{background:var(--glass);border:1px solid var(--line);}
 .hud{position:fixed;z-index:5}
 #clock{top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;border-radius:var(--r);padding:7px 12px;display:flex;gap:10px;align-items:baseline}
+#clock .deskly-mark{align-self:center;margin:-4px 1px -4px -4px}
 #clock b{font-size:17px;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 #clock span{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
 #counters{top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;display:flex;gap:6px}
@@ -28,6 +29,8 @@ button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px soli
 #counters .warn{border-color:rgba(240,160,32,.6);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 4px rgba(240,160,32,.18)}}
 #cross{left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 1.5px rgba(0,0,0,.35);pointer-events:none}
+#control-hint{left:50%;bottom:38px;transform:translateX(-50%);padding:10px 16px;background:var(--glass-2);border:1px solid var(--accent);color:var(--text);font-size:13px;font-weight:700;box-shadow:0 10px 28px rgba(0,0,0,.35)}
+#control-hint span{display:block;color:var(--dim);font-size:11px;font-weight:400;margin-top:3px}
 #prompt{left:50%;top:calc(50% + 34px);transform:translateX(-50%);border-radius:var(--r);padding:8px 12px;font-size:13px;display:flex;gap:10px;align-items:center;white-space:nowrap;max-width:calc(100vw - 32px)}
 #prompt kbd{font-family:var(--mono);font-size:11px;border:1px solid rgba(255,255,255,.35);border-radius:var(--r);padding:1px 6px}
 #prompt small{color:var(--dim)}
@@ -65,6 +68,12 @@ button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px soli
 .card.green{border-color:rgba(47,191,113,.5);background:rgba(47,191,113,.07)}
 .card.red{border-color:rgba(224,80,74,.5);background:rgba(224,80,74,.07)}
 .card .t{font-weight:700;font-size:14px}
+.employee-resume h3{margin:0;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.resume-row{display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:start;font-size:12px}
+.resume-row>b{color:var(--dim);font-weight:600;padding-top:4px}
+.resume-tags{display:flex;flex-wrap:wrap;gap:5px}
+.resume-tags span{padding:3px 7px;border:1px solid var(--line);background:var(--plate);font-size:11px}
+.resume-tags small{color:var(--dim)}
 .bar{height:6px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
 .bar b{display:block;height:100%;background:var(--blue);transition:width .3s}
 .steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:12.5px}

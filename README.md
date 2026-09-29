@@ -1,121 +1,128 @@
-# Deskly
+<div align="center">
 
-**Your AI company, in a real office.** Deskly is an open-source desktop app for Windows, macOS and Linux. You walk a 3D office in first person and hire AI employees. You hand them real work on your project, approve anything risky, and review what they deliver. You also have your own laptop at your desk, where you can code, run commands, chat with your assistant and send work to the team.
+<img src="docs/banner.svg" alt="Deskly: your AI company, in a real office" width="100%">
 
-Think of multi-agent office tools like Munder Difflin, but as a place you walk around in instead of a dashboard.
+<br>
 
-## What you can do
+[![CI](https://github.com/Priyanshu-1622/Deskly/actions/workflows/ci.yml/badge.svg)](https://github.com/Priyanshu-1622/Deskly/actions/workflows/ci.yml)
+![Version](https://img.shields.io/github/package-json/v/Priyanshu-1622/Deskly?label=version&color=f2c230)
+![License](https://img.shields.io/github/license/Priyanshu-1622/Deskly?color=6aa981)
+![Electron](https://img.shields.io/badge/Electron-38-47848f?logo=electron&logoColor=white)
+![Status](https://img.shields.io/badge/status-prototype-f2c230)
+[![Last commit](https://img.shields.io/github/last-commit/Priyanshu-1622/Deskly?color=718b65)](https://github.com/Priyanshu-1622/Deskly/commits/main)
 
-- **Hire your team.** Add or remove employees, pick a role and department, and write their job description and personality.
-- **Design how each employee looks.** A live 3D preview lets you set body, height, skin, hair, clothes, glasses, beard and headset.
-- **Give every employee their own AI.** Each one gets its own provider, model and API key: Anthropic, OpenAI, Gemini, OpenRouter, Ollama (local), or any OpenAI-compatible endpoint.
-  - Every role has an editable work playbook. Project and approved cross-project notes, file claims and teammate handoffs provide continuity when tasks overlap.
-  - An optional lightweight model can handle planning, short conversations and meeting ideas. The main model handles task execution. Token usage and a monthly ceiling are available in Settings.
-  - One employee can reuse another's key.
-  - "Use this AI setup for the whole team" copies one employee's provider and key to everyone in a single click.
-- **Walk the office.** Move with WASD and look with the mouse. People arrive in the morning, grab coffee, chat, sit at their desks and type, and look up when you walk past.
-- **Assign real work.** Walk up to someone and press **E**. They plan the task, then work inside your project folder: they list, read and write files. Their monitor shows a live log.
-- **Approvals.** Shell commands and anything that leaves the company (email, publishing, deploys, payments) pause for you. The employee raises a hand, then walks over to find you. Deskly never sends or publishes anything on its own; approved external actions are recorded in the audit log.
-- **Results.** When the work is done, the employee comes to tell you. Their report is saved to `deskly-output/`, and any files they touched open on your laptop.
-- **Your laptop.** Sit at your desk and press **E** (or press **L** anywhere). You get a file tree of your project, an editor (Ctrl+S saves), a terminal, your own AI assistant (which sees the open file and can insert code), and a box to send instructions to anyone on the team.
-- **Call people from your chair.** Sit at your desk (E), then press **C**. Pick everyone, a department or specific people, and choose where: your office, the boardroom or a meeting room. Seats fill first and anyone extra stands around the room. Send everyone back with one click.
-- **Meetings.** Press **M**, pick a room and the attendees, and they walk over and sit down. You can run a go-round of status updates, or brainstorm a topic where each person answers with their own AI.
-- **Operations board.** Press **Tab** for every task, pending approval, the team, and the audit log.
+**Walk through a 3D office, give AI teammates work on your project, and review what they build.**
 
-## Controls
+[Get started](#get-started) · [See the app](#inside-deskly) · [How it works](#how-work-moves-through-deskly) · [Safety and limits](#safety-and-current-limits)
 
-| Key | Action |
-|---|---|
-| W A S D | Walk (hold Shift to hurry) |
-| Mouse | Look (click the view to capture the mouse) |
-| E | Talk to the person you're facing, or use what's in front of you |
-| L | Open your laptop |
-| Tab | Operations board |
-| C | Call people (to your office or a meeting room) |
-| Esc | Close a panel, or pause |
-| F11 | Full screen |
+</div>
 
-## Getting started
+Deskly is an open-source, first-person **desktop app** built with Electron. You can hire a team, customize each employee's role and instructions, assign real project tasks, and work from your own laptop in the office. Employees only call an AI provider when they have work to do. Without a key, the office runs in demo mode with simulated tasks.
+
+> [!NOTE]
+> Deskly is a working prototype. The screens below come from the actual Windows app using a sample company and demo mode. AI output quality, cost savings, and cross-platform packages have not been validated for a production release.
+
+## Inside Deskly
+
+<p align="center">
+  <img src="docs/screenshots/office.png" alt="First-person view inside the Deskly office" width="100%">
+  <br><sub>Walk the office, find teammates, and see task status without leaving the world.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/employee.png" alt="Employee panel with a skills and knowledge resume, task controls, and demo mode notice" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/laptop.png" alt="In-office laptop with project files, editor, terminal, assistant, and team delegation" width="100%"></td>
+  </tr>
+  <tr><td><b>Meet your team.</b> Each person has skills, knowledge, editable work instructions, an AI setup, and a task history.</td><td><b>Work from your desk.</b> Browse and edit your project, use a terminal, ask your assistant, or delegate to an employee.</td></tr>
+</table>
+
+## What is working today
+
+| Area | What you can do |
+| --- | --- |
+| 3D office | Walk in first person; meet employees at their desks; use the operations board, rooms, meetings, and your laptop. Idle employees animate without making AI calls. |
+| Your team | Hire from role presets, edit work instructions and appearance, and inspect a skills and knowledge resume for each employee. |
+| AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, or an OpenAI-compatible endpoint per employee. The laptop assistant can use a separate setup. |
+| Project work | Assign tasks against a selected project folder. An employee plans, reads and writes files, reports progress, and returns a result for review. |
+| Coordination | Keep project notes, approved cross-project notes, file claims, and teammate handoffs. Relevant memory is retrieved for active tasks. |
+| Cost controls | Use an optional lightweight model for planning and conversation, see provider usage, and set a monthly token ceiling. The target of 60–70% savings is **not yet measured**. |
+| Oversight | Review shell commands and external action requests before approval. See current tasks and an audit log on the operations board. |
+
+Each role ships with a detailed default playbook, and you can replace it for any employee in **Team & AI keys → Work instructions**. [Read the agent architecture](AGENT_ARCHITECTURE.md) for memory, coordination, and cost details.
+
+## Get started
+
+You need **Node.js 22+** and npm. Windows is the currently tested desktop target; macOS and Linux package targets are configured but still need verification.
 
 ```bash
 git clone https://github.com/Priyanshu-1622/Deskly.git
 cd Deskly
-npm install
-npm start            # run the app
-npm run dev          # run with DevTools
-npm test             # runtime tests (Node 20+)
-npm run dist:win     # or dist:mac / dist:linux — builds an installer into dist/
+npm ci
+npm start
 ```
 
-On first launch, a setup wizard walks you through five steps:
-1. Your name and your company's name.
-2. Your project folder.
-3. Your team.
-4. Your assistant.
-5. A summary, then you walk into the office.
+On first launch, the setup wizard asks for your name, company, project folder, team, and laptop assistant. Start in **demo mode** to explore without an API key. To make employees do real AI work, add a supported provider and key in **Team & AI keys**. Ollama uses a local endpoint. API keys are stored through Electron's encrypted OS storage when available.
 
-Everything can be changed later in **Settings**.
-
-See [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) for the current memory and coordination behavior and the cost-reduction plan.
-
-## Design system: Wayfinding
-
-The UI borrows from office signage rather than typical app chrome:
-- **Colour:** olive-graphite plates (`#242922`, `#323a2f`) with a signal-yellow marker (`#f2c230`) on warm off-white text (`#ece8d9`).
-- **Type:** condensed DIN-style lettering (Bahnschrift on Windows) for headings and labels.
-- **Shape:** square 3px corners, hairline rules, and a yellow band on the top edge of every panel, like a room plate.
-- **Status colours:** kept separate from the accent.
-
-All the tokens live at the top of `src/renderer/css/game.css`.
-
-## Current security model
-
-- **API keys** are submitted from the setup/settings form to the main process, then encrypted with Electron `safeStorage` before being written to disk. When secure storage is unavailable, saving a key fails. Older `enc:false` key records are ignored and should be removed from the app data folder after re-entering keys.
-- **File tools** use the chosen project folder and refuse paths through symbolic links and common secret filenames. This is a boundary for Deskly's file tools, not a system sandbox.
-- **Shell commands** require approval and display the complete command (up to 300 characters). Approved commands run with your OS permissions and can access locations outside the project folder. The block list only catches some obvious dangerous commands.
-- **External actions** are approved and recorded, but Deskly does not send or publish them.
-- **Audit events** are appended to `audit.jsonl`. Audit write failures are not yet surfaced to the user.
-- **The renderer** uses a sandbox, context isolation, a CSP and a restricted preload bridge. Main process IPC checks the sending frame.
-
-This is a working prototype, not a production security guarantee. See [PRODUCTION_AUDIT.md](PRODUCTION_AUDIT.md) for the remaining release work.
-
-## Architecture
-
-```
-src/main/                 Electron main process (the trusted side)
-  main.js                 window, app:// protocol, IPC handlers
-  preload.js              the only bridge exposed to the renderer
-  store.js                settings JSON + encrypted API keys
-  runtime/runtime.js      task lifecycle, agent loop, approvals, audit log
-  runtime/providers.js    Anthropic / OpenAI-compatible / demo adapters
-  runtime/workspace.js    project-scoped file tools and command runner
-src/renderer/             the 3D app (untrusted side, no Node access)
-  js/game.js              boot, office flow, first-person loop
-  js/screens.js           start menu, setup wizard, settings, pause, laptop
-  js/ui.js                HUD, conversations, board, meetings
-  js/agents.js            employee behaviour and task-state → world mapping
-  js/human.js             procedural characters and animation
-  js/world.js, nav.js     office, doors, lifts, screens, pathfinding
-  js/runtime-client.js    mirror of runtime state for the UI
-  js/bridge.js            preload API, or a demo fallback in a plain browser
-  assets/                 office.glb + world.json (generated)
-tools/build_office.py     regenerates the office (Python, trimesh)
+```bash
+npm test          # automated runtime and UI tests
+npm run dev       # app with developer tools
+npm run dist:win  # build the Windows installer into dist/
 ```
 
-### The agent loop
+The repository also declares `dist:mac` and `dist:linux` targets. Run those on their respective platforms once packaging has been verified there.
 
-1. The employee first produces a short plan as JSON.
-2. It then works turn by turn, and each turn is one JSON action: `list_dir`, `read_file`, `write_file`, `run_command` or `request_action`, or `done` with a report.
-3. The loop is provider-agnostic, so any chat model that can follow JSON instructions works.
+### Controls
 
-To add a provider, add an entry to `PROVIDERS` and a branch in `chat()`.
+| Key | Action |
+| --- | --- |
+| **W A S D** / **Shift** | Walk / move faster |
+| **Mouse** | Look around; click the office view to capture the pointer |
+| **E** | Talk, interact, or sit at your desk |
+| **L** | Open your laptop |
+| **Tab** | Open the operations board |
+| **C** | Call people to your office or a meeting room |
+| **M** | Start a meeting |
+| **Esc** | Close a panel or pause |
+| **F11** | Full screen |
 
-## Known limits
+## How work moves through Deskly
 
-- External actions (email, publishing, deploys) are approved and recorded, not performed. Connectors for real sending are the natural next step.
-- Characters are procedural (no imported models). This keeps the repo small and fully source-built.
-- Only the 196 desks in the generated office are available; there's no second floor yet.
+```text
+You assign a task
+      ↓
+The employee plans and checks relevant project memory
+      ↓
+The employee works in your project folder and shares file claims / handoffs
+      ↓
+Commands or external actions wait for your approval
+      ↓
+You review the result, touched files, and audit trail
+```
+
+Only employees with an active task use AI calls. Plans and short conversations can use a cheaper model, while execution uses the employee's main model. Usage metering and a monthly ceiling help control cost; actual spend still depends on the provider and tasks.
+
+## Safety and current limits
+
+- Project file tools stay within the chosen folder and reject symbolic link paths and common secret filenames. This does **not** sandbox the entire app.
+- API keys are encrypted with Electron `safeStorage`; saving a key fails if secure storage is unavailable.
+- Approved shell commands run with your OS permissions and can reach outside the project folder. Read the full command before approving it.
+- Email, publishing, deployment, and payment requests are approval-gated and recorded. Deskly does not execute those external actions yet.
+- The 3D people are procedural characters. The office and app are playable, but visuals and interaction still need refinement.
+- Deskly is a prototype. Review the implementation and keep backups before allowing it to edit an important project.
+
+## Project map
+
+| Path | Purpose |
+| --- | --- |
+| `src/main/` | Electron window, secure storage, provider adapters, task runtime, workspace tools |
+| `src/renderer/` | 3D office, first-person controls, employees, screens, and laptop |
+| `tools/build_office.py` | Generates the office world assets |
+| `test/` | Runtime and UI tests |
+| `docs/` | README artwork and real app screenshots |
+
+The agent loop and its current limitations are described in [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md). Contributions and issue reports are welcome.
 
 ## License
 
-MIT
+[MIT](LICENSE) © Priyanshu Patel

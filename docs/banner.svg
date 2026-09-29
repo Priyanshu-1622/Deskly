@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">Deskly — your AI company, in a real office</title>
+  <desc id="desc">Animated office floor plan showing a task moving from you to an AI teammate, then to a review and a finished project.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#171c18"/><stop offset="1" stop-color="#2d3529"/></linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#5e6855" stroke-width=".7" opacity=".3"/></pattern>
+    <filter id="glow"><feGaussianBlur stdDeviation="5"/></filter>
+    <style>
+      .signal{animation:travel 7s ease-in-out infinite}
+      .signal-glow{animation:travel 7s ease-in-out infinite}
+      .desk-light{animation:breathe 3s ease-in-out infinite}
+      .desk-light.two{animation-delay:.5s}
+      .desk-light.three{animation-delay:1s}
+      .scan{animation:scan 5s ease-in-out infinite}
+      @keyframes travel{0%,7%{transform:translate(0,0)}31%{transform:translate(140px,0)}56%{transform:translate(140px,52px)}79%,100%{transform:translate(288px,52px)}}
+      @keyframes breathe{0%,100%{opacity:.4}50%{opacity:1}}
+      @keyframes scan{0%,100%{opacity:.18}50%{opacity:.6}}
+      @media (prefers-reduced-motion:reduce){.signal,.signal-glow,.desk-light,.scan{animation:none}}
+    </style>
+  </defs>
+  <rect width="1200" height="380" rx="12" fill="url(#bg)"/>
+  <rect width="1200" height="380" rx="12" fill="url(#grid)"/>
+  <path d="M0 0h1200v5H0z" fill="#f2c230"/>
+  <path d="M664 0v380" stroke="#687260" opacity=".55"/>
+  <path d="M686 32h482v316H686z" fill="#20271f" stroke="#64705c" stroke-width="2"/>
+  <path d="M686 70h482M686 306h482" stroke="#64705c" stroke-width="2"/>
+  <path d="M720 92h412" stroke="#7b876e" stroke-width="2" stroke-dasharray="5 11" opacity=".45"/>
+  <path d="M720 215h412" stroke="#7b876e" stroke-width="2" stroke-dasharray="5 11" opacity=".45"/>
+  <path d="M720 122h140v82H720zm140 0h140v82H860zm140 0h132v82h-132z" fill="#283128" stroke="#66735e" stroke-width="2"/>
+  <path d="M738 142h105M878 142h105M1018 142h97" stroke="#aab69c" stroke-width="5" stroke-linecap="square"/>
+  <path d="M745 158h92M885 158h92M1025 158h83" stroke="#aab69c" stroke-width="3" opacity=".6"/>
+  <path d="M789 204v52h140v-52M929 256h148" fill="none" stroke="#f2c230" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 8"/>
+  <circle cx="789" cy="204" r="7" fill="#f2c230"/>
+  <circle cx="929" cy="256" r="7" fill="#f2c230"/>
+  <circle cx="1077" cy="256" r="7" fill="#f2c230"/>
+  <circle class="signal-glow" cx="789" cy="204" r="15" fill="#f2c230" opacity=".5" filter="url(#glow)"/>
+  <circle class="signal" cx="789" cy="204" r="6" fill="#fff3ac"/>
+  <circle class="desk-light" cx="744" cy="183" r="4" fill="#f2c230"/>
+  <circle class="desk-light two" cx="884" cy="183" r="4" fill="#f2c230"/>
+  <circle class="desk-light three" cx="1024" cy="183" r="4" fill="#f2c230"/>
+  <rect x="716" y="268" width="119" height="25" rx="3" fill="#343e32"/>
+  <rect x="858" y="268" width="119" height="25" rx="3" fill="#343e32"/>
+  <rect x="1000" y="268" width="132" height="25" rx="3" fill="#343e32"/>
+  <g fill="#c1cbb8" font-family="Arial,sans-serif" font-size="11" font-weight="bold" letter-spacing="2"><text x="734" y="285">ASSIGN</text><text x="881" y="285">BUILD</text><text x="1017" y="285">REVIEW</text></g>
+  <g transform="translate(55 57)">
+    <path d="M0 0h60c27 0 43 16 43 42v16c0 27-16 43-43 43H0V0zm19 19v63h41c16 0 24-8 24-24V42c0-16-8-23-24-23H19z" fill="#f2c230"/>
+    <path d="M20 70h62v12H20z" fill="#171c18"/><circle cx="54" cy="47" r="5" fill="#171c18"/>
+  </g>
+  <text x="55" y="214" fill="#f5f2e5" font-family="Arial,sans-serif" font-size="72" font-weight="800" letter-spacing="5">DESKLY</text>
+  <text x="57" y="252" fill="#f2c230" font-family="Arial,sans-serif" font-size="20" font-weight="700" letter-spacing="1">YOUR AI COMPANY, IN A REAL OFFICE.</text>
+  <text x="57" y="296" fill="#b6c0ac" font-family="Arial,sans-serif" font-size="16">Walk in. Give work. Review what your team builds.</text>
+  <path class="scan" d="M57 322h545" stroke="#f2c230" stroke-width="2"/>
+  <text x="57" y="344" fill="#8c9b84" font-family="Arial,sans-serif" font-size="11" font-weight="bold" letter-spacing="2">OPEN SOURCE  /  DESKTOP  /  FIRST PERSON</text>
+</svg>

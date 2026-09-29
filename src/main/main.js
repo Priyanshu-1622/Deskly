@@ -1,5 +1,5 @@
 // Deskly — Electron main process.
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, Menu, session, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, Menu, session, protocol, net, nativeTheme } = require('electron');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
 const path = require('path');
@@ -26,7 +26,9 @@ function profileFor(id) {
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1100, minHeight: 680,
-    backgroundColor: '#0e1316', show: true, title: 'Deskly',
+    backgroundColor: '#171a15', show: true, title: 'Deskly',
+    icon: path.join(RENDERER, 'assets', 'deskly-icon.png'),
+    autoHideMenuBar: process.platform !== 'darwin',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
   });
   win.loadURL(APP_URL);
@@ -108,6 +110,7 @@ function wireIPC() {
 }
 
 app.whenReady().then(() => {
+  nativeTheme.themeSource = 'dark';
   protocol.handle('app', req => {
     try {
       const url = new URL(req.url);
