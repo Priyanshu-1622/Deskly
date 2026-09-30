@@ -6,7 +6,7 @@
     constructor(camera, dom, nav) {
       Object.assign(this, { camera, dom, nav });
       this.pos = new T.Vector3(20, 0, -6.4); this.sens = 1; this.invertY = false; this.yaw = 0; this.pitch = -0.02; this.eyeY = 1.66;
-      this.keys = {}; this.enabled = false; this.bob = 0; this.coffee = 0;
+      this.keys = {}; this.enabled = false; this.bob = 0; this.coffee = 0; this.heldDrink = null; this.sipT = 0;
       this.move = { x: 0, z: 0 }; this.lookDrag = null; this.locked = false; this.sprint = false;
       this.touch = matchMedia('(pointer: coarse)').matches;
       this.bind();
@@ -14,11 +14,13 @@
       const cup = new T.Group();
       const mat = new T.MeshStandardMaterial({ color: '#f4f2ee', roughness: 0.4 });
       const sl = new T.MeshStandardMaterial({ color: '#7a4e2d', roughness: 0.8 });
+      const liquid = new T.MeshStandardMaterial({ color: '#4a2515', roughness: 0.35 });
       const c1 = new T.Mesh(new T.CylinderGeometry(0.04, 0.034, 0.11, 16), mat);
       const c2 = new T.Mesh(new T.CylinderGeometry(0.041, 0.041, 0.035, 16), sl); c2.position.y = 0.005;
       const lid = new T.Mesh(new T.CylinderGeometry(0.042, 0.042, 0.012, 16), new T.MeshStandardMaterial({ color: '#2a2a2a' })); lid.position.y = 0.06;
-      cup.add(c1, c2, lid); cup.position.set(0.2, -0.2, -0.38); cup.visible = false;
-      camera.add(cup); this.cup = cup;
+      const fill = new T.Mesh(new T.CylinderGeometry(0.031, 0.031, 0.006, 16), liquid); fill.position.y = 0.051;
+      cup.add(c1, c2, fill, lid); cup.position.set(0.2, -0.2, -0.38); cup.visible = false;
+      camera.add(cup); Object.assign(this, { cup, cupLid: lid, cupSleeve: c2, cupLiquid: fill });
     }
     bind() {
       const d = this.dom;
@@ -63,7 +65,33 @@
     }
     releaseLock() { if (document.pointerLockElement) document.exitPointerLock?.(); this.lookDrag = null; }
     setMove(x, z) { this.move.x = x; this.move.z = z; }
-    giveCoffee() { this.coffee = 120; this.cup.visible = true; }
+    giveCoffee() { return this.giveDrink('coffee'); }
+    giveDrink(type = 'coffee') {
+      this.heldDrink = { type, remaining: 4, max: 4 };
+      this.coffee = type === 'coffee' ? 1 : 0;
+      this.cup.visible = true;
+      this.cupSleeve.material.color.set(type === 'water' ? '#5c9fb8' : '#7a4e2d');
+      this.cupLiquid.material.color.set(type === 'water' ? '#bce8f2' : '#4a2515');
+      this.cupLid.visible = type === 'coffee';
+      this.cupLiquid.visible = true;
+      return this.heldDrink;
+    }
+    drink() {
+      if (!this.heldDrink || this.heldDrink.remaining <= 0 || this.sipT > 0) return null;
+      this.sipT = 0.9;
+      this.heldDrink.remaining--;
+      const result = { ...this.heldDrink };
+      if (this.heldDrink.remaining <= 0) {
+        this.cupLiquid.visible = false;
+        result.empty = true;
+      }
+      return result;
+    }
+    discardDrink() {
+      if (!this.heldDrink) return false;
+      this.heldDrink = null; this.coffee = 0; this.sipT = 0; this.cup.visible = false;
+      return true;
+    }
     forward() { return new T.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
     update(dt) {
       let mx = this.move.x, mz = this.move.z;
@@ -88,7 +116,12 @@
       const bobY = len > 0.01 ? Math.sin(this.bob) * 0.022 : 0;
       this.camera.position.set(this.pos.x, this.eyeY + bobY, this.pos.z);
       this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
-      if (this.coffee > 0) { this.coffee -= dt; if (this.coffee <= 0) this.cup.visible = false; this.cup.position.y = -0.2 + bobY * 0.5; }
+      if (this.sipT > 0) this.sipT = Math.max(0, this.sipT - dt);
+      if (this.heldDrink) {
+        const sip = this.sipT > 0 ? Math.sin((1 - this.sipT / 0.9) * Math.PI) : 0;
+        this.cup.position.set(0.2 - sip * 0.12, -0.2 + bobY * 0.5 + sip * 0.19, -0.38 + sip * 0.16);
+        this.cup.rotation.set(-sip * 0.85, 0, sip * 0.12);
+      }
     }
   }
   window.DesklyPlayer = Player;

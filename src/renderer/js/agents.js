@@ -17,6 +17,12 @@
     COMPLETED: { label: 'Result ready', color: '#2fbf71' }, FAILED: { label: 'Failed', color: '#e0504a' }, IDLE: { label: 'Away', color: '#9aa3ad' }
   };
   const TASK_TO_STATE = { created: 'PLANNING', queued: 'PLANNING', planning: 'PLANNING', running: 'WORKING', reviewing: 'WORKING', waiting_for_approval: 'WAITING_FOR_APPROVAL', completed: 'COMPLETED', failed: 'FAILED', cancelled: 'AVAILABLE' };
+  const shiftState = (saved, dateKey) => ({
+    dateKey,
+    overtime: Array.isArray(saved?.overtime) ? saved.overtime.slice() : [],
+    recalled: Array.isArray(saved?.recalled) ? saved.recalled.slice() : [],
+    sentHome: saved?.dateKey === dateKey && Array.isArray(saved?.sentHome) ? saved.sentHome.slice() : []
+  });
 
   /* ---------------------------------------------------------------- status sprite */
   function statusSprite() {
@@ -253,8 +259,11 @@
       this.employees = (ctx.config.employees || []).map(d => new Employee({ ...d, dept: D[d.dept] ? d.dept : 'Engineering', room: (D[d.dept] || D.Engineering).room, tasks: d.tasks || [], look: DesklyPresets.lookToRig(d.look || {}) }, ctx));
       this.assignSeats();
       this.meeting = null;
+      const saved = ctx.life?.state.shift;
+      this.shift = shiftState(saved, ctx.clockInfo.dateKey);
+      if (ctx.life) { ctx.life.state.shift = this.shift; ctx.life.save(); }
     }
-    hour() { return this.ctx.clock.getHours() + this.ctx.clock.getMinutes() / 60; }
+    hour() { return this.ctx.clockInfo.hour + this.ctx.clockInfo.minute / 60; }
     assignSeats() {
       const used = new Set();
       const byRoom = r => this.chairs.filter(c => c.room === r);
@@ -276,7 +285,7 @@
           const along = dx * fw[0] + dz * fw[1], side = Math.abs(dx * fw[1] - dz * fw[0]);
           if (along > 0.3 && along < 1.3 && side < 0.8) { const d = side + Math.abs(along - 0.8); if (d < bd) { bd = d; best = s; } }
         }
-        if (best) e.screen = this.ctx.world.addScreen(best);
+        if (best) { e.screenMarker = best; e.screen = this.ctx.world.addScreen(best); }
       }
     }
     nearestPoi(p, kind) {
@@ -305,6 +314,15 @@
 
     /* ---------------- morning arrival ---------------- */
     startDay() {
+      if (!this.ctx.clockInfo.workday || this.hour() < 9 || this.hour() >= 18) { this.arrivals = []; return; }
+      if (this.hour() >= 11) {
+        this.arrivals = [];
+        for (const e of this.employees) {
+          const s = e.seat; e.spawnAt(s.p[0], s.p[2], Math.atan2(s.f[0], s.f[1]));
+          e.posture = 'sit'; e.sitSeat = s; e.rig.seatH = s.seat;
+        }
+        return;
+      }
       const early = new Set(this.employees.filter((e, i) => i % 3 === 0).map(e => e.id));
       const rec = this.employees.find(e => e.dept === 'Reception');
       this.arrivals = [];
@@ -322,6 +340,7 @@
         if (a.done || time < a.at) continue;
         a.done = true;
         const e = a.e;
+        if (!this.onShift(e) && !this.shouldStay(e)) continue;
         if (a.via === 'lift') {
           const L = W.lifts[Math.random() < 0.5 ? 0 : 1];
           const x = (L.x0 + L.x1) / 2;
@@ -340,11 +359,80 @@
       }
     }
 
+    shiftMinutes(e) { return this.employees.indexOf(e) * 3; }
+    onShift(e) {
+      const t = this.ctx.clockInfo.hour * 60 + this.ctx.clockInfo.minute;
+      const stagger = this.shiftMinutes(e);
+      return !this.shift.sentHome.includes(e.id) && this.ctx.clockInfo.workday && t >= 9 * 60 + stagger && t < 18 * 60 + stagger;
+    }
+    shouldStay(e) {
+      if (this.shift.sentHome.includes(e.id)) return false;
+      return this.shift.overtime.includes(e.id) || this.shift.recalled.includes(e.id) || !!this.ctx.runtime.activeFor(e.id);
+    }
+    saveShift() { if (this.ctx.life) { this.ctx.life.state.shift = this.shift; this.ctx.life.save(); } }
+    recall(e, manual = true) {
+      if (!e) return;
+      if (manual) {
+        this.shift.sentHome = this.shift.sentHome.filter(id => id !== e.id);
+        if (!this.shift.recalled.includes(e.id)) this.shift.recalled.push(e.id);
+        this.saveShift();
+      }
+      if (e.present) {
+        if (e.errand === 'leaving') { e.clear(); e.errand = null; e.goDesk(); }
+        return;
+      }
+      this.arrivals?.filter(a => a.e === e).forEach(a => { a.done = true; });
+      e.clear(); e.errand = null; e.greeted = false;
+      e.posture = 'stand'; e.sitSeat = null;
+      e.spawnAt(20, -7.4, 0);
+      e.activity = 'Coming back to the office';
+      e.push({ type: 'goto', x: 20, z: 2.6 }); e.goDesk();
+      e.say(manual ? 'I’m coming back to the office.' : 'Back to work.', 3);
+    }
+    setOvertime(e, enabled) {
+      this.shift.overtime = this.shift.overtime.filter(id => id !== e.id);
+      if (enabled) {
+        this.shift.overtime.push(e.id);
+        this.shift.sentHome = this.shift.sentHome.filter(id => id !== e.id);
+      }
+      this.saveShift();
+      if (enabled) this.recall(e, false);
+      else this.syncShift();
+    }
+    sendHome(e, immediate = false, directed = false) {
+      if (!e?.present || e.errand === 'leaving' || (!directed && this.ctx.runtime.activeFor(e.id)) || e.meeting || e.interacting) return false;
+      e.clear(); e.errand = 'leaving'; e.activity = 'Heading home';
+      if (immediate) { e.present = false; e.rig.root.visible = false; e.errand = null; e.activity = 'At home'; return true; }
+      e.say(['Heading home. See you tomorrow!', 'That’s me done for today.', 'Good night!'][this.employees.indexOf(e) % 3], 3);
+      e.push({ type: 'stand' }, { type: 'goto', x: 20, z: -7.4 }, { type: 'call', fn: () => { e.rig.cup.visible = false; e.rig.phone.visible = false; e.activity = 'At home'; e.errand = null; } }, { type: 'hide' });
+      return true;
+    }
+    release(e) {
+      this.shift.recalled = this.shift.recalled.filter(id => id !== e.id);
+      this.shift.overtime = this.shift.overtime.filter(id => id !== e.id);
+      if (!this.shift.sentHome.includes(e.id)) this.shift.sentHome.push(e.id);
+      this.saveShift();
+      return this.sendHome(e, false, true);
+    }
+    syncShift(immediate = false) {
+      if (this.shift.dateKey !== this.ctx.clockInfo.dateKey) {
+        this.shift = shiftState(this.shift, this.ctx.clockInfo.dateKey);
+        this.saveShift();
+      }
+      for (const e of this.employees) {
+        const pendingArrival = this.arrivals?.some(a => a.e === e && !a.done);
+        if (this.onShift(e) || this.shouldStay(e)) {
+          if ((e.present && e.errand === 'leaving') || (!e.present && !pendingArrival)) this.recall(e, false);
+        } else this.sendHome(e, immediate, this.shift.sentHome.includes(e.id));
+      }
+    }
+
     /* ---------------- task state -> world ---------------- */
     bindRuntime(bus, runtime) {
       bus.on('task.status_changed', ev => {
         const e = this.byId(ev.employeeId); if (!e) return;
         const st = TASK_TO_STATE[ev.status];
+        if (st && !e.present && !this.shift.sentHome.includes(e.id)) this.recall(e, false);
         if (ev.status === 'cancelled') { e.setState('AVAILABLE'); e.say('Understood — I stopped that task.', 3); return; }
         if (st) e.setState(st);
         if (ev.status === 'running' && e.approvalWalk) { e.approvalWalk = false; if (!e.meeting) { e.clear(); e.say('Thanks — back to it.', 2.5); e.goDesk(); } }
@@ -364,7 +452,7 @@
     }
     byId(id) { return this.employees.find(e => e.id === id); }
     walkToPlayer(e, why) {
-      if (e.meeting || e.interacting) return;
+      if (!e.present || e.meeting || e.interacting) return;
       const P = this.ctx.player.pos;
       if (Math.hypot(P.x - e.pos.x, P.z - e.pos.z) < 5) { e.say(why === 'approval' ? 'Could you approve this for me?' : why === 'result' ? 'Want to take a look?' : 'I\'m right here!', 3); return; }
       if (why === 'approval') e.approvalWalk = true;
@@ -403,6 +491,28 @@
           emp.goDesk();
         });
       }
+      if (what === 'coffeeTogether') {
+        e.errand = 'coffee-break'; e.say('Coffee break sounds good.', 2.5);
+        e.coffeeRun(emp => {
+          emp.push({ type: 'goto', x: P.pos.x, z: P.pos.z, follow: () => P.pos, stopNear: () => Math.hypot(P.pos.x - emp.pos.x, P.pos.z - emp.pos.z) < 1.7 },
+            { type: 'face', x: P.pos.x, z: P.pos.z }, { type: 'anim', mode: 'drink', dur: 6 },
+            { type: 'say', text: pick(['Good to step away for a minute.', 'This is a much better way to catch up.', 'I had a useful idea on the walk over.']), dur: 4 },
+            { type: 'call', fn: () => { emp.rig.cup.visible = false; emp.errand = null; } });
+          emp.goDesk();
+        });
+      }
+      if (what === 'introduce') {
+        const mate = this.employees.filter(o => o !== e && o.present && !o.meeting && !o.errand && o.state === 'AVAILABLE')
+          .sort((a, b) => Math.hypot(a.pos.x - e.pos.x, a.pos.z - e.pos.z) - Math.hypot(b.pos.x - e.pos.x, b.pos.z - e.pos.z))[0];
+        if (!mate) { e.say('Everyone is busy right now. Let’s try later.', 3); return; }
+        e.errand = 'introduction'; e.say(`I’ll go introduce myself to ${mate.name.split(' ')[0]}.`, 3);
+        const spot = { x: mate.pos.x + 0.9, z: mate.pos.z + 0.4 };
+        e.push({ type: 'stand' }, { type: 'goto', ...spot }, { type: 'face', x: mate.pos.x, z: mate.pos.z },
+          { type: 'call', fn: () => { mate.lookAt = e.head; mate.say(`Hey ${e.name.split(' ')[0]} — good to properly meet.`, 3.5); } },
+          { type: 'say', text: `Let’s keep each other posted on ${e.dept} and ${mate.dept}.`, dur: 4 },
+          { type: 'call', fn: () => { mate.lookAt = null; e.errand = null; } });
+        e.goDesk();
+      }
       if (what === 'office') {
         const ceo = this.chairs.filter(c => c.room === 'CEO_Office' && !c.exec)[0];
         e.errand = 'office'; e.say('On my way to your office.', 2.5);
@@ -413,12 +523,13 @@
     /* ---------------- meetings ---------------- */
     callMeeting(room, people, topic) {
       if (this.meeting) this.endMeeting();
+      people.forEach(e => { if (e.present === false) this.recall(e); });
       const chairs = this.chairs.filter(c => c.room === room && !c.exec).sort((a, b) => a.p[0] - b.p[0] || a.p[2] - b.p[2]);
       // Keep a chair free for the founder, including when everyone is called.
       const occupiedByPlayer = this.ctx.player?.seated && this.ctx.player.seat?.room === room ? this.ctx.player.seat : null;
       const playerSeat = room === 'CEO_Office' ? this.chairs.find(c => c.room === room && c.exec) : occupiedByPlayer || chairs[0];
       if (room !== 'CEO_Office' && playerSeat) chairs.splice(chairs.indexOf(playerSeat), 1);
-      const C = { CEO_Office: [6.4, 31.3], Boardroom: [14, 32.2], Meeting_1: [20, 32.2], Meeting_2: [24, 32.2], Meeting_3: [28, 32.2] }[room] || [chairs[0]?.p[0] || 14, chairs[0]?.p[2] || 32];
+      const C = { CEO_Office: [3.3, 27.3], Boardroom: [14, 32.2], Meeting_1: [20, 32.2], Meeting_2: [24, 32.2], Meeting_3: [28, 32.2] }[room] || [chairs[0]?.p[0] || 14, chairs[0]?.p[2] || 32];
       const m = { room, topic, people: [], playerSeat, phase: 'gathering', speaking: null, t0: this.ctx.time, lines: [] };
       people.forEach((e, i) => {
         e.clear(); e.errand = null; e.interacting = false; e.meeting = m; m.people.push(e);
@@ -493,8 +604,8 @@
       if (!e.present) { g.fillStyle = '#56606a'; g.fillText('Locked', 8, H / 2); }
       else if (!t || st === 'AVAILABLE') {
         g.fillStyle = '#7d8a96'; g.fillText('Ready for work', 8, 34);
-        const hr = this.ctx.clock; g.fillStyle = '#c9d1d9'; g.font = 'bold 22px system-ui, sans-serif';
-        g.fillText(hr.toTimeString().slice(0, 5), 8, 66);
+        g.fillStyle = '#c9d1d9'; g.font = 'bold 22px system-ui, sans-serif';
+        g.fillText(this.ctx.clockInfo.time, 8, 66);
         g.font = '10px ui-monospace, monospace'; g.fillStyle = '#56606a'; g.fillText('No active task', 8, H - 10);
       } else {
         const S = STATUS[st];
@@ -510,5 +621,5 @@
     }
   }
 
-  window.DesklyAgents = { STATUS, DEPT_COLOR, Office, Employee };
+  window.DesklyAgents = { STATUS, DEPT_COLOR, Office, Employee, shiftState };
 })();

@@ -68,8 +68,11 @@
         h('button', { type: 'button', onclick: () => this.openBoard('tasks'), title: 'Results ready for review' }, h('i', { style: 'background:#2fbf71' }), `${done}`, h('span', {}, ' ready'))
       );
     }
-    clock(d) {
-      $('#clockT').textContent = d.toTimeString().slice(0, 5);
+    clock(info, preview = false) {
+      if (!info) return;
+      $('#clockT').textContent = info.time;
+      $('#clockD').textContent = `${info.label} · ${info.region.replace(/^.*·\s*/, '')}${preview ? ' · Preview' : ''}`;
+      $('#clock').title = `Office time · ${info.zone}${preview ? ' · Fast preview' : ''}`;
     }
     toast(text, color = '#f2c230', action) {
       const el = h('div', { class: 'toast glass' }, h('i', { style: `background:${color}` }), h('span', {}, text), action ? h('button', { type: 'button', onclick: () => { action.fn(); el.remove(); } }, action.label) : null);
@@ -268,14 +271,21 @@
       };
       const ideas = h('div', { class: 'ideas' }, ...e.tasks.map(t => h('button', { type: 'button', onclick: () => { ta.value = t; ta.focus(); } }, t)));
       const orders = h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', onclick: () => { const line = app.life?.statusLine(e) || e.activity; e.say(line, 6); this.toast(line, e.color); } }, 'Quick status'),
         h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'coffee'); this.close(); } }, 'Bring me a coffee'),
+        h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'coffeeTogether'); this.close(); } }, 'Take a coffee break'),
         h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'follow'); this.close(); } }, 'Follow me'),
+        h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'introduce'); this.close(); } }, 'Meet a teammate'),
         h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'office'); this.close(); } }, 'Wait in my office'),
         h('button', { class: 'btn', type: 'button', onclick: () => { app.office.order(e, 'desk'); this.close(); } }, 'Back to your desk'),
         h('button', { class: 'btn', type: 'button', onclick: () => this.openMeeting([e.dept]) }, 'Call a meeting'));
+      const feedback = h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', onclick: () => app.life?.feedback(e, 'positive') }, 'Praise this work'),
+        h('button', { class: 'btn', type: 'button', onclick: () => app.life?.feedback(e, 'revise') }, 'Needs a better pass'));
       const body = h('div', { class: 'body' }, e.provider === 'demo' || !e.provider ? h('div', { class: 'card amber' }, h('div', { class: 'note', style: 'color:#f3d9a6' }, `${fname(e.name)} is in demo mode, so work is simulated. Give them a provider and API key in Settings → Team.`)) : '', resumeCard, taskBox,
         h('div', { class: 'sect' }, h('h3', {}, 'Give work'), ta, h('div', { class: 'row' }, assignBtn, askBtn), chatBox, h('h3', { style: 'margin-top:4px' }, 'Ideas for ' + e.role.toLowerCase()), ideas),
         h('div', { class: 'sect' }, h('h3', {}, 'Ask in person'), orders),
+        h('div', { class: 'sect' }, h('h3', {}, 'Feedback'), feedback),
         h('p', { class: 'note' }, `Scope: ${e.scope}. ${fname(e.name)} works inside your project folder. Commands and anything that leaves the company always stop for your approval.`));
       let lastKey = '';
       const render = (force) => {
@@ -343,7 +353,7 @@
       let cur = tab, lastKey = '';
       const renderTabs = () => bar.replaceChildren(...tabs.map(t => h('button', { type: 'button', role: 'tab', 'aria-selected': String(t === cur), onclick: () => { cur = t; lastKey = ''; renderTabs(); render(); } }, names[t] + (t === 'approvals' && rt.pendingApprovals().length ? ` (${rt.pendingApprovals().length})` : ''))));
       const render = () => {
-        const key = cur + rt.list().map(t => t.status + (t.progress * 20 | 0)).join() + rt.pendingApprovals().length + app.office.employees.map(e => e.state).join() + (cur === 'audit' ? app.audit.entries.length : '');
+        const key = cur + rt.list().map(t => t.status + (t.progress * 20 | 0)).join() + rt.pendingApprovals().length + app.office.employees.map(e => `${e.state}:${e.present}:${e.activity}`).join() + app.office.shift.overtime.join() + app.office.shift.recalled.join() + app.office.shift.sentHome.join() + (cur === 'audit' ? app.audit.entries.length : '');
         if (key === lastKey) return; lastKey = key; renderTabs();
         if (cur === 'tasks') {
           const ts = rt.list();
@@ -363,10 +373,26 @@
               h('div', { class: 'row' }, h('button', { class: 'btn warn', type: 'button', onclick: () => rt.respondApproval(a.id, 'approved') }, 'Approve'), h('button', { class: 'btn danger', type: 'button', onclick: () => rt.respondApproval(a.id, 'rejected') }, 'Reject'), h('button', { class: 'btn', type: 'button', onclick: () => this.openEmployee(e) }, 'Open')));
           })) : h('p', { class: 'note' }, 'Nothing is waiting for you.'));
         } else if (cur === 'team') {
-          body.replaceChildren(h('div', { class: 'list' }, ...app.office.employees.map(e => h('div', { class: 'item' },
-            h('div', { class: 'avatar', style: `background:${e.color};width:32px;height:32px;font-size:12px;border-radius:9px` }, initials(e.name)),
-            h('div', { class: 'meta' }, h('b', {}, `${e.name} · ${e.role}`), h('small', {}, `${DesklyAgents.STATUS[e.state].label} · ${e.present ? e.activity : 'Not in yet'}`)),
-            h('button', { class: 'btn', type: 'button', disabled: !e.present, onclick: () => { app.office.walkToPlayer(e, 'summon'); e.say('Coming over!', 2); this.close(); } }, 'Summon')))));
+          const office = app.office, afterHours = !app.clockInfo.workday || office.hour() >= 18 || office.hour() < 9;
+          const refresh = () => { lastKey = ''; render(); };
+          body.replaceChildren(
+            h('div', { class: 'card' }, h('div', { class: 't' }, 'Office shift'),
+              h('p', { class: 'note' }, `${afterHours ? 'After hours.' : 'The normal shift is 09:00–18:00.'} Calling the team back keeps them here through the night and across restarts until you send them home. Their active tasks continue if you send them home.`),
+              h('div', { class: 'row' },
+                h('button', { class: 'btn primary', type: 'button', onclick: () => { office.employees.forEach(e => office.recall(e)); refresh(); } }, 'Call everyone back · keep here'),
+                h('button', { class: 'btn', type: 'button', onclick: () => { office.employees.forEach(e => office.release(e)); refresh(); } }, 'Send everyone home'))),
+            h('div', { class: 'list' }, ...office.employees.map(e => {
+              const overtime = office.shift.overtime.includes(e.id);
+              const held = overtime || office.shift.recalled.includes(e.id);
+              return h('div', { class: 'item team-item' },
+                h('div', { class: 'avatar', style: `background:${e.color};width:32px;height:32px;font-size:12px;border-radius:9px` }, initials(e.name)),
+                h('div', { class: 'meta' }, h('b', {}, `${e.name} · ${e.role}`), h('small', {}, `${DesklyAgents.STATUS[e.state].label} · ${e.present ? e.activity : 'At home'}`)),
+                h('div', { class: 'row team-actions' },
+                  h('button', { class: 'btn', type: 'button', disabled: held, onclick: () => { office.recall(e); refresh(); } }, held ? 'Held here' : e.present ? 'Keep here' : 'Call back'),
+                  h('button', { class: 'btn' + (overtime ? ' primary' : ''), type: 'button', onclick: () => { office.setOvertime(e, !overtime); refresh(); } }, overtime ? 'End overtime' : 'Overtime'),
+                  h('button', { class: 'btn', type: 'button', onclick: () => { office.release(e); refresh(); } }, 'Send home'),
+                  h('button', { class: 'btn', type: 'button', disabled: !e.present, onclick: () => { office.walkToPlayer(e, 'summon'); e.say('Coming over!', 2); this.close(); } }, 'Summon')));
+            })));
         } else {
           body.replaceChildren(h('div', { class: 'audit' }, ...app.audit.entries.slice(-120).reverse().map(ev => h('div', {}, `${ev.timestamp.slice(11, 19)}  ${ev.type}  ${ev.employeeId || ''} ${ev.status || ev.decision || ev.title || (ev.action ? ev.action.summary : '') || ev.text || ''}`.slice(0, 160)))),
             h('p', { class: 'note' }, 'Every task, status change, approval decision and output line is recorded here.'));
@@ -375,6 +401,72 @@
       this.panelEmp && (this.panelEmp.interacting = false); this.panelEmp = null;
       this.open('board', this.hdr('Operations board', 'Everything your team is doing, in one place'), [bar, body], render);
       render();
+    }
+
+    /* ---------------- physical office objects ---------------- */
+    openMonitor(e) {
+      const taskBox = h('div', { class: 'sect' });
+      const render = () => {
+        const t = this.app.runtime.activeFor(e.id) || this.app.runtime.latestFor(e.id);
+        taskBox.replaceChildren(...this.taskCard(t, e));
+      };
+      this.open('monitor', this.hdr(`${fname(e.name)}’s monitor`, `${e.role} · ${e.activity}`),
+        h('div', { class: 'body' }, h('div', { class: 'card' }, h('div', { class: 't' }, e.state === 'AVAILABLE' ? 'Ready for work' : DesklyAgents.STATUS[e.state].label), h('p', { class: 'note' }, 'This is a live view of the employee’s current task. Looking at it does not interrupt them or make an AI call.')), taskBox), render);
+      render();
+    }
+    openWhiteboard(marker, life) {
+      const room = marker.room || 'Office', saved = life.board(room);
+      const area = h('textarea', { rows: 14, placeholder: 'Goals, decisions, architecture notes, blockers…' }); area.value = saved.text || '';
+      const save = h('button', { class: 'btn primary', type: 'button', onclick: () => { life.saveBoard(room, area.value); save.textContent = 'Saved'; this.toast(`${room.replace(/_/g, ' ')} whiteboard updated.`, '#2fbf71'); } }, 'Save board');
+      const tasks = this.app.runtime.list().slice(0, 8);
+      const pin = h('div', { class: 'ideas' }, ...tasks.map(t => h('button', { type: 'button', onclick: () => { const line = `## ${t.title}\n- Owner: ${this.app.office.byId(t.employeeId)?.name || t.employeeId}\n- Status: ${STATUS_LABEL[t.status] || t.status}\n- Progress: ${Math.round((t.progress || 0) * 100)}%`; area.value = [area.value.trim(), line].filter(Boolean).join('\n\n'); } }, `${STATUS_LABEL[t.status] || t.status} · ${t.title}`)));
+      const lastMeeting = life.state.meetings[0];
+      const lighting = h('div', { class: 'sect' }, h('h3', {}, 'Office lighting'), h('div', { class: 'row' },
+        ...['day', 'focus', 'evening'].map(mode => h('button', { class: 'btn' + (life.state.lighting === mode ? ' primary' : ''), type: 'button', onclick: () => life.setLighting(mode) }, mode[0].toUpperCase() + mode.slice(1)))));
+      this.open('whiteboard', this.hdr(`${room.replace(/_/g, ' ')} whiteboard`, saved.updatedAt ? `Last updated ${new Date(saved.updatedAt).toLocaleString()}` : 'Shared project notes'),
+        h('div', { class: 'body' }, h('div', { class: 'sect' }, h('h3', {}, 'Board'), area, h('div', { class: 'row' }, save,
+          h('button', { class: 'btn', type: 'button', disabled: !lastMeeting, onclick: () => { if (lastMeeting) area.value = [area.value.trim(), lastMeeting.summary].filter(Boolean).join('\n\n'); } }, 'Pin latest meeting'))),
+          h('div', { class: 'sect' }, h('h3', {}, 'Pin live work'), tasks.length ? pin : h('p', { class: 'note' }, 'No tasks yet.')),
+          lighting));
+    }
+    openPrinter(marker, life) {
+      const completed = this.app.runtime.list().filter(t => t.status === 'completed').slice(0, 12);
+      const queue = h('div', { class: 'list' });
+      const render = () => {
+        const rows = life.state.printQueue.length ? life.state.printQueue.map(item => h('button', { class: 'item', type: 'button', onclick: () => { life.collectPrint(item); render(); } },
+          h('div', { class: 'meta' }, h('b', {}, item.title), h('small', {}, item.collected ? 'Collected · open again' : 'In printer tray · collect')),
+          h('span', { class: 'chip' }, item.collected ? 'Filed' : 'Ready'))) : [h('p', { class: 'note' }, 'The printer tray is empty.')];
+        queue.replaceChildren(...rows);
+      };
+      const jobs = h('div', { class: 'ideas' }, ...completed.map(t => h('button', { type: 'button', onclick: () => { life.queuePrint(t); this.toast(`Printed “${t.title}”.`, '#2fbf71'); render(); } }, `Print · ${t.title}`)));
+      this.open('printer', this.hdr('Office printer', marker.room?.replace(/_/g, ' ') || 'Print room'), h('div', { class: 'body' },
+        h('div', { class: 'sect' }, h('h3', {}, 'Tray'), queue), h('div', { class: 'sect' }, h('h3', {}, 'Completed reports'), completed.length ? jobs : h('p', { class: 'note' }, 'Completed employee reports will appear here.'))));
+      render();
+    }
+    openPresentationDisplay(marker, life) {
+      const employees = this.app.office.employees.filter(e => e.present);
+      const recent = this.app.runtime.list().filter(t => t.status === 'completed');
+      const now = h('div', { class: 'card' }, h('div', { class: 't' }, 'Office overview'), h('p', { class: 'note' }, `${employees.length} people present · ${this.app.runtime.list().filter(t => DesklyRuntime.ACTIVE.has(t.status)).length} active tasks · ${this.app.runtime.pendingApprovals().length} approvals waiting`));
+      const reports = h('div', { class: 'ideas' }, ...recent.slice(0, 10).map(t => h('button', { type: 'button', onclick: () => {
+        const e = this.app.office.byId(t.employeeId); now.replaceChildren(h('div', { class: 't' }, t.title), h('p', { class: 'note' }, `${e?.name || t.employeeId} · completed`), h('div', { class: 'md', html: md(String(t.result?.body || 'Result ready.').slice(0, 1200)) }));
+      } }, `Present · ${t.title}`)));
+      this.open('display', this.hdr(`${marker.room?.replace(/_/g, ' ') || 'Office'} display`, 'Presentation and room controls'), h('div', { class: 'body' }, now,
+        h('div', { class: 'sect' }, h('h3', {}, 'Present completed work'), recent.length ? reports : h('p', { class: 'note' }, 'Completed work will be available for presentation here.')),
+        h('div', { class: 'sect' }, h('h3', {}, 'View'), h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => this.app.togglePhotoMode?.() }, 'Toggle photo mode'), ...['day', 'focus', 'evening'].map(mode => h('button', { class: 'btn', type: 'button', onclick: () => life.setLighting(mode) }, mode))))));
+    }
+    openCeoArchive(marker, life) {
+      const board = life.board('CEO_Office');
+      const meetings = life.state.meetings.slice(0, 8);
+      const reports = this.app.runtime.list().filter(t => t.status === 'completed').slice(0, 10);
+      const preview = h('div', { class: 'card' }, h('div', { class: 't' }, 'Select an item'), h('p', { class: 'note' }, 'Your office notes, meeting records, and completed work are kept here.'));
+      const show = (title, body) => preview.replaceChildren(h('div', { class: 't' }, title), h('div', { class: 'md', html: md(body) }));
+      const item = (title, body) => h('button', { class: 'item', type: 'button', onclick: () => show(title, body) }, h('div', { class: 'meta' }, h('b', {}, title)));
+      this.open('archive', this.hdr('CEO office archive', 'Your decisions and finished work'), h('div', { class: 'body' },
+        preview,
+        h('div', { class: 'sect' }, h('h3', {}, 'Office notes'), board.text ? item('CEO whiteboard', board.text) : h('p', { class: 'note' }, 'The CEO whiteboard is empty.'),
+          h('button', { class: 'btn', type: 'button', onclick: () => this.openWhiteboard({ room: 'CEO_Office' }, life) }, 'Open whiteboard')),
+        h('div', { class: 'sect' }, h('h3', {}, 'Meeting records'), meetings.length ? h('div', { class: 'list' }, ...meetings.map(m => item(`${m.topic} · ${new Date(m.at).toLocaleDateString()}`, m.summary))) : h('p', { class: 'note' }, 'Meeting summaries will appear here.')),
+        h('div', { class: 'sect' }, h('h3', {}, 'Completed reports'), reports.length ? h('div', { class: 'list' }, ...reports.map(t => item(t.title, String(t.result?.body || 'Result ready.').slice(0, 6000)))) : h('p', { class: 'note' }, 'Completed employee work will appear here.'))));
     }
 
     /* ---------------- meetings ---------------- */
@@ -409,6 +501,7 @@
     }
     meetingLive() {
       const app = this.app, of = app.office, m = of.meeting;
+      m.actions ||= [];
       const status = h('p', { class: 'note' });
       const transcript = h('div', { class: 'chat' });
       const lines = m.lines;
@@ -423,9 +516,30 @@
         try { await of.runBrainstorm(tp, { meeting: (t, p) => DK.meetingIdeas(t, p) }, addLine); } catch (err) { this.toast(DesklyRuntime.errorCopy(err), '#e0504a'); }
         b1.disabled = b2.disabled = false;
       } }, 'Brainstorm this topic');
-      const end = h('button', { class: 'btn danger', type: 'button', onclick: () => { of.endMeeting(); this.toast('Everyone is heading back to their desks.', '#f2c230'); this.close(); } }, 'Send everyone back');
+      let selected = m.people[0] || null;
+      const speakerButtons = h('div', { class: 'ideas' });
+      const renderSpeakers = () => speakerButtons.replaceChildren(...m.people.map(e => h('button', { type: 'button', style: selected === e ? `border-style:solid;border-color:${e.color};color:#fff` : '', onclick: () => { selected = e; renderSpeakers(); } }, fname(e.name))));
+      renderSpeakers();
+      const actionInput = h('input', { type: 'text', placeholder: 'Decision or follow-up action…' });
+      const actionList = h('div', { class: 'list' });
+      const renderActions = () => {
+        const rows = m.actions.length ? m.actions.map((x, i) => h('div', { class: 'item' }, h('div', { class: 'meta' }, h('b', {}, x)),
+          h('button', { class: 'mini', type: 'button', onclick: () => { m.actions.splice(i, 1); renderActions(); } }, 'Remove'))) : [h('p', { class: 'note' }, 'No decisions captured yet.')];
+        actionList.replaceChildren(...rows);
+      };
+      renderActions();
+      const askSpeaker = h('button', { class: 'btn', type: 'button', onclick: () => { if (!selected) return; const line = app.life?.statusLine(selected) || selected.activity; m.speaking = selected; selected.say(line, 6); addLine(selected, line); } }, 'Ask for update');
+      const present = h('button', { class: 'btn', type: 'button', onclick: () => { if (!selected) return; app.life?.present(selected, m); renderT(); } }, 'Present latest work');
+      const end = h('button', { class: 'btn danger', type: 'button', onclick: () => {
+        const summary = app.life?.finishMeeting(m); of.endMeeting();
+        this.toast(summary ? 'Meeting ended. Notes and action items were pinned to the room whiteboard.' : 'Everyone is heading back to their desks.', '#f2c230'); this.close();
+      } }, 'End and save meeting');
       const render = () => { const a = of.meetingArrived(); status.textContent = `${a} of ${m.people.length} arrived in ${m.room.replace('_', ' ')}. ${a < m.people.length ? 'People are still walking over.' : 'Everyone is here.'}`; };
-      this.open('meetingLive', this.hdr(m.room === 'CEO_Office' ? 'In your office' : 'Meeting in progress', m.room === 'CEO_Office' ? `${m.people.length} people called in` : m.room.replace('_', ' ')), h('div', { class: 'body' }, status, h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2)), h('div', { class: 'sect' }, h('h3', {}, 'Transcript'), transcript), h('div', { class: 'row' }, end)), render);
+      this.open('meetingLive', this.hdr(m.room === 'CEO_Office' ? 'In your office' : 'Meeting in progress', m.room === 'CEO_Office' ? `${m.people.length} people called in` : m.room.replace('_', ' ')), h('div', { class: 'body' }, status,
+        h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2)),
+        h('div', { class: 'sect' }, h('h3', {}, 'Choose a speaker'), speakerButtons, h('div', { class: 'row' }, askSpeaker, present)),
+        h('div', { class: 'sect' }, h('h3', {}, 'Decisions and actions'), actionInput, h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: () => { const value = actionInput.value.trim(); if (!value) return; m.actions.push(value); actionInput.value = ''; renderActions(); } }, 'Add action item')), actionList),
+        h('div', { class: 'sect' }, h('h3', {}, 'Transcript'), transcript), h('div', { class: 'row' }, end)), render);
       render();
     }
   }

@@ -39,6 +39,19 @@
   await runtime.init();
   const bootEl = $('#boot'); bootEl.classList.add('gone'); setTimeout(() => bootEl.remove(), 600);
 
+  app.refreshClock = () => {
+    const settings = screens.settings(), mode = settings.timeMode || 'real';
+    if (app.timeMode !== mode) {
+      app.timeMode = mode;
+      app.previewStartedAt = Date.now(); app.previewDate = new Date();
+    }
+    app.clock = mode === 'preview' ? new Date(app.previewDate.getTime() + (Date.now() - app.previewStartedAt) * 300) : new Date();
+    app.clockInfo = DesklyOfficeTime.info(app.clock, settings.timeZone || 'auto');
+    world.setTime(app.clockInfo);
+    return app.clockInfo;
+  };
+  app.refreshClock();
+
   /* ---------- settings ---------- */
   app.applySettings = () => {
     const st = screens.settings();
@@ -46,6 +59,7 @@
     renderer.setPixelRatio(q); resize();
     camera.fov = st.fov; camera.updateProjectionMatrix();
     player.sens = st.sensitivity; player.invertY = st.invertY;
+    app.refreshClock();
     document.body.classList.toggle('no-tags', !st.nameTags);
     if (app.office && screens.cfg && app.teamSig !== teamSig(screens.cfg)) rebuildTeam();
   };
@@ -67,6 +81,7 @@
       const st = { planning: 'PLANNING', queued: 'PLANNING', running: 'WORKING', reviewing: 'WORKING', waiting_for_approval: 'WAITING_FOR_APPROVAL' }[t.status];
       if (st) e.setState(st); else if (t.status === 'completed' && !t.reviewed) e.setState('COMPLETED');
     }
+    app.office.syncShift(true);
   }
   function rebuildTeam() {
     for (const e of app.office.employees) { world.scene.remove(e.rig.root); if (e.screen) world.scene.remove(e.screen.plane); }
@@ -104,6 +119,9 @@
 
   /* ---------- UI ---------- */
   const ui = new DesklyUI(app); app.ui = ui;
+  const life = new DesklyOfficeLife.OfficeLife(app); app.life = life;
+  world.setLighting?.(life.state.lighting);
+  world.setCeoLamp?.(life.state.ceoLamp);
   const updateBadge = () => {
     const emps = screens.cfg?.employees || [], n = emps.filter(e => e.provider && e.provider !== 'demo').length;
     ui.setProvider(n ? 'claude' : 'demo', n ? `${n} of ${emps.length} employees connected to AI` : 'Demo mode · add API keys in Settings');
@@ -118,9 +136,9 @@
 
   /* ---------- interactions ---------- */
   const objects = [
-    ...M.filter(m => m.kind === 'coffee').map(c => ({ key: 'coffee' + c.p[0], x: c.p[0] + c.f[0] * 0.5, z: c.p[2] + c.f[1] * 0.5, r: 1.6, label: 'Grab a coffee', short: 'Coffee', fn: () => { player.giveCoffee(); ui.toast('Fresh coffee in hand.', '#c08a5a'); } })),
+    ...life.objects(M),
     ...(exec ? [{ key: 'desk', x: exec.p[0] + exec.f[0] * 0.3, z: exec.p[2] + exec.f[1] * 0.3, r: 1.8, desk: true, short: 'Desk', fn: () => player.seated ? app.openLaptop() : app.sit() }] : []),
-    ...M.filter(m => m.kind === 'chair' && ['Boardroom', 'Meeting_1', 'Meeting_2', 'Meeting_3'].includes(m.room)).map(c => ({
+    ...M.filter(m => m.kind === 'chair' && !m.desk && !m.exec).map(c => ({
       key: `seat${c.p[0]}:${c.p[2]}`, x: c.p[0] - c.f[0] * 0.6, z: c.p[2] - c.f[1] * 0.6,
       r: 1.25, seat: c, short: 'Sit', fn: () => app.sit(c)
     })),
@@ -139,6 +157,16 @@
       if (d > 3.2) continue;
       const ang = v.normalize().angleTo(look); if (ang > 0.55) continue;
       const sc = ang * 3 + d * 0.3; if (sc < bs) { bs = sc; best = { kind: 'emp', e }; }
+    }
+    if (best) return best;
+    for (const e of app.office.employees) {
+      const m = e.screenMarker;
+      if (!m || !e.present) continue;
+      const v = new T.Vector3(m.p[0], m.p[1], m.p[2]).sub(eye), d = v.length();
+      if (d > 2.25) continue;
+      const ang = v.normalize().angleTo(look); if (ang > 0.48) continue;
+      const sc = ang * 3 + d * 0.25;
+      if (sc < bs) { bs = sc; best = { kind: 'obj', o: { key: `monitor:${e.id}`, monitor: e, short: 'Monitor', fn: () => ui.openMonitor(e) } }; }
     }
     if (best) return best;
     for (const o of objects) {
@@ -160,7 +188,11 @@
     }
     const o = f.o;
     if (o.desk) return player.seated ? { key: 'lap', label: 'Open your laptop', sub: 'or C to call people', short: 'Laptop' } : { key: 'sit', label: 'Sit at your desk', sub: 'work from your chair', short: 'Sit' };
-    if (o.seat) return { key: o.key, label: 'Sit in the meeting room', sub: 'W A S D to stand up · M to run a meeting', short: 'Sit' };
+    if (o.seat) return { key: o.key, label: `Sit in ${String(o.seat.room || 'the office').replace(/_/g, ' ')}`, sub: 'W A S D to stand up', short: 'Sit' };
+    if (o.monitor) return { key: o.key, label: `Inspect ${o.monitor.name}’s work`, sub: 'live task view · does not interrupt them', short: 'Monitor' };
+    if (o.lifeKind === 'coffee') return { key: o.key, label: player.heldDrink?.type === 'coffee' ? 'Refill your coffee' : 'Pour a coffee', sub: 'F to drink · R to discard', short: 'Coffee' };
+    if (o.lifeKind === 'water') return { key: o.key, label: player.heldDrink?.type === 'water' ? 'Refill your water' : 'Fill a water cup', sub: 'F to drink · R to discard', short: 'Water' };
+    if (o.lifeKind === 'lamp') return { key: o.key, label: life.state.ceoLamp ? 'Switch off your office lamp' : 'Switch on your office lamp', short: 'Lamp' };
     return { key: o.key, label: o.room ? (app.office.meeting ? 'Run the meeting' : `Call a meeting in ${o.room.replace('_', ' ')}`) : o.label, sub: o.sub, short: o.short };
   };
   app.sit = (seat = exec) => {
@@ -178,12 +210,17 @@
   /* ---------- flow ---------- */
   app.enterOffice = (fresh) => {
     if (!screens.cfg) return screens.setup();
+    app.refreshClock();
     if (!app.office) { buildOffice(true); player.pos.set(20, 0, -6.4); player.yaw = Math.PI; player.pitch = -0.02; app.time = 0; }
     else if (app.teamSig !== teamSig(screens.cfg)) rebuildTeam();
     app.applySettings(); updateBadge();
     ui.buildMinimapBase?.();
     app.resume();
-    if (fresh || !app.welcomed) { app.welcomed = true; setTimeout(() => ui.toast(`Welcome to ${app.config.company}. Walk up to anyone and press E.`, '#f2c230'), 500); }
+    if (fresh || !app.welcomed) {
+      app.welcomed = true;
+      const afterHours = !app.clockInfo.workday || app.clockInfo.hour < 9 || app.clockInfo.hour >= 18;
+      setTimeout(() => ui.toast(afterHours ? 'The office is after hours. Press Tab → Team to call people back or assign overtime.' : `Welcome to ${app.config.company}. Walk up to anyone and press E.`, '#f2c230'), 500);
+    }
   };
   app.resume = () => {
     screens.show(null); app.playing = true; player.enabled = true; $('#cross').hidden = false;
@@ -192,6 +229,10 @@
   };
   app.pause = () => { app.playing = false; player.enabled = false; player.releaseLock(); ui.close(); screens.pause(); };
   app.openLaptop = path => { app.playing = false; player.enabled = false; player.releaseLock(); ui.close(); screens.laptop(path); };
+  app.togglePhotoMode = () => {
+    document.body.classList.toggle('photo-mode');
+    ui.toast(document.body.classList.contains('photo-mode') ? 'Photo mode on · press P to restore the HUD.' : 'Photo mode off.', '#f2c230');
+  };
   document.addEventListener('pointerlockchange', () => {
     $('#control-hint').hidden = !app.playing || !!document.pointerLockElement || player.touch;
   });
@@ -208,17 +249,24 @@
     else if (!app.playing && e.code === 'Escape' && document.body.dataset.screen === 'screen-laptop') screens.closeLaptop();
     else if (!app.playing && e.code === 'Escape' && document.body.dataset.screen === 'screen-pause') app.resume();
     else if (app.playing && e.code === 'KeyL' && !ui.panelKind) app.openLaptop();
+    else if (app.playing && e.code === 'KeyF' && !ui.panelKind) life.sip();
+    else if (app.playing && e.code === 'KeyR' && !ui.panelKind) life.discard();
+    else if (app.playing && e.code === 'KeyP' && !ui.panelKind) app.togglePhotoMode();
   });
 
   /* ---------- loop ---------- */
-  let last = performance.now(), hudT = 0, mmT = 0, panelT = 0, attract = 0;
-  const start = new Date(); start.setHours(8, 52, 0, 0);
+  let last = performance.now(), hudT = 0, mmT = 0, panelT = 0, skyT = 0, shiftT = 0, attract = 0;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    skyT -= dt;
+    if (skyT <= 0) { skyT = 0.5; app.refreshClock(); }
     if (app.office) {
-      app.time += dt; app.clock = new Date(start.getTime() + app.time * 20000);
+      app.time += dt;
       app.office.runArrivals(app.time);
+      shiftT -= dt;
+      if (shiftT <= 0) { shiftT = 1; app.office.syncShift(); }
       for (const e of app.office.employees) e.update(dt);
+      life.update(dt);
     }
     if (app.playing || app.office) player.update(app.playing ? dt : 0);
     if (!app.office || (!app.playing && document.body.dataset.screen === 'screen-start')) {
@@ -226,13 +274,18 @@
       camera.position.set(30 + Math.cos(attract) * 34, 17 + Math.sin(attract * 0.7) * 3, 18 + Math.sin(attract) * 24);
       camera.lookAt(30, 0.5, 18);
     }
+    world.sky.mesh.position.copy(camera.position);
+    world.sky.uniforms.drift.value = (now * 0.000002) % 1;
     world.update(dt, app.office ? [player.pos, ...app.office.employees.filter(e => e.present).map(e => e.pos)] : []);
     if (app.playing) { focus = findFocus(); ui.prompt(promptFor(focus)); } else ui.prompt(null);
     $('#hud').hidden = !app.playing; $('#seatbar').hidden = !(app.playing && player.seated);
+    const heldbar = $('#heldbar'), held = player.heldDrink;
+    heldbar.hidden = !app.playing || !held;
+    if (held) heldbar.innerHTML = `<b>${held.type === 'coffee' ? 'COFFEE' : 'WATER'}</b><span>${'●'.repeat(Math.max(0, held.remaining))}${'○'.repeat(Math.max(0, held.max - held.remaining))}</span><kbd>F</kbd> drink <kbd>R</kbd> discard`;
     $('#control-hint').hidden = !app.playing || player.locked || player.touch;
     if (app.office && app.playing) ui.tagsUpdate(camera); else $('#tags').replaceChildren(), ui.tags?.clear?.();
     hudT -= dt; mmT -= dt; panelT -= dt;
-    if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clock); drawCeo(); }
+    if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clockInfo, app.timeMode === 'preview'); drawCeo(); }
     if (app.office && app.playing && mmT <= 0) { mmT = 0.2; ui.minimap(player, app.office.employees); }
     if (panelT <= 0) { panelT = 0.33; ui.tick(); }
     renderer.render(world.scene, camera);

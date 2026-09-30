@@ -13,13 +13,14 @@
 <div id="stage"></div>
 <div id="hud" hidden>
   <div id="tags"></div>
-  <div id="clock" class="hud glass"><img class="deskly-mark small" src="assets/deskly-icon.png" alt=""><b id="clockT">08:52</b><span id="clockD">Monday</span></div>
+  <div id="clock" class="hud glass"><img class="deskly-mark small" src="assets/deskly-icon.png" alt=""><b id="clockT">--:--</b><span id="clockD">Loading date</span></div>
   <div id="provider" class="hud glass"><i></i><span></span></div>
   <div id="counters" class="hud"></div>
   <div id="cross" class="hud" hidden></div>
   <button id="control-hint" class="hud" type="button" hidden>Click to control <span>W A S D to move · Esc to pause</span></button>
   <div id="prompt" class="hud glass" hidden></div>
   <div id="toasts" class="hud"></div>
+  <div id="heldbar" class="hud glass" hidden></div>
   <div id="minimap" class="hud glass"><canvas id="mm" width="480" height="288"></canvas></div>
   <div id="joy" class="hud" hidden><b></b></div>
   <div id="tbtns" class="hud" hidden><button id="tBoard" type="button">Board</button><button id="tRun" type="button">Walk</button><button id="tAct" type="button">Talk</button></div>
@@ -45,9 +46,13 @@
 <script src="js/runtime-client.js"></script>
 <script src="js/human.js"></script>
 <script src="js/nav.js"></script>
-<script src="js/world.js"></script>
+<script src="js/office-time.js"></script>
+<script src="js/office-sky.js"></script>
+  <script src="js/office-materials.js"></script>
+  <script src="js/world.js"></script>
 <script src="js/agents.js"></script>
 <script src="js/player.js"></script>
+<script src="js/office-life.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/screens.js"></script>
 <script src="js/game.js"></script>

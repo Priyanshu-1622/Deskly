@@ -23,7 +23,7 @@
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('small', {}, hint) : null);
   const mark = (extra = '') => h('img', { class: `deskly-mark ${extra}`.trim(), src: 'assets/deskly-icon.png', alt: '' });
 
-  const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'high', nameTags: true };
+  const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'high', nameTags: true, timeZone: 'auto', timeMode: 'real' };
 
   class Screens {
     constructor(app) {
@@ -288,7 +288,12 @@
         if (cur === 'general') body = h('div', { class: 'sbody narrow' },
           field('Your name', h('input', { type: 'text', value: draft.founder, oninput: e => { draft.founder = e.target.value; } })),
           field('Company name', h('input', { type: 'text', value: draft.company, oninput: e => { draft.company = e.target.value; } })),
-          field('Project folder', h('div', { class: 'row' }, h('code', { class: 'path' }, draft.workspace || 'Not set'), h('button', { class: 'btn', type: 'button', onclick: async () => { const p = await DK.workspaceChoose(); if (p) { draft.workspace = p; render(); } } }, 'Change…')), 'Your team can only read and write inside this folder.'));
+          field('Project folder', h('div', { class: 'row' }, h('code', { class: 'path' }, draft.workspace || 'Not set'), h('button', { class: 'btn', type: 'button', onclick: async () => { const p = await DK.workspaceChoose(); if (p) { draft.workspace = p; render(); } } }, 'Change…')), 'Your team can only read and write inside this folder.'),
+          field('Office region', h('select', { onchange: e => { st.timeZone = e.target.value; } }, ...DesklyOfficeTime.REGIONS.map(r => h('option', { value: r.id, selected: st.timeZone === r.id }, r.label))), 'The clock, sunrise, sunset, and team schedule use this region. Daylight saving changes are handled automatically.'),
+          field('Time flow', h('select', { onchange: e => { st.timeMode = e.target.value; } },
+            h('option', { value: 'real', selected: st.timeMode === 'real' }, 'Real time'),
+            h('option', { value: 'preview', selected: st.timeMode === 'preview' }, 'Preview day cycle · 5 office minutes per second')),
+          'Real time uses the actual date and clock. Preview is for watching the full sky and office shift cycle quickly.'));
         else if (cur === 'team') body = h('div', { class: 'sbody' }, this.teamEditor(draft));
         else if (cur === 'memory') body = this.memoryPanel(draft);
         else if (cur === 'assistant') body = h('div', { class: 'sbody narrow' }, h('p', { class: 'lead' }, 'The assistant on your laptop. It sees the file you have open when you ask about it.'), this.aiFields(draft.assistant = draft.assistant || { provider: 'demo' }, 'assistant', draft));
@@ -299,7 +304,7 @@
           field('Graphics quality', h('select', { onchange: e => { st.quality = e.target.value; } }, ...[['high', 'High (sharp, needs a decent GPU)'], ['balanced', 'Balanced'], ['low', 'Low (laptops, integrated graphics)']].map(([v, l]) => h('option', { value: v, selected: v === st.quality }, l)))),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.nameTags, onchange: e => { st.nameTags = e.target.checked; } }), 'Show name tags and speech bubbles'),
           h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => DK.appFullscreen() }, 'Toggle full screen (F11)')),
-          h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['Tab', 'Operations board'], ['C', 'Call people'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
+          h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['F', 'Drink what you are holding'], ['R', 'Discard an empty cup'], ['P', 'Photo mode'], ['Tab', 'Operations board'], ['C / M', 'Call people / meeting'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
         else body = h('div', { class: 'sbody narrow' },
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: draft.security.approveWrites, onchange: e => { draft.security.approveWrites = e.target.checked; } }), 'Ask me before an employee writes any file'),
           field('Monthly AI token ceiling', h('input', { type: 'number', min: 0, step: 10000, value: draft.security.monthlyTokenLimit || 0, oninput: e => { draft.security.monthlyTokenLimit = Math.max(0, Number(e.target.value) || 0); } }), '0 means no ceiling. Once reported usage reaches this number, new AI calls stop. A call already in progress can take the total over the ceiling.'),
@@ -368,7 +373,7 @@
     /* =============================== PAUSE =============================== */
     pause() {
       const s = $('#screen-pause');
-      s.replaceChildren(h('div', { class: 'pausebox' }, h('div', { class: 'app-heading' }, mark(), h('span', {}, 'Deskly')), h('h2', {}, 'Paused'), h('p', {}, `${this.cfg.company} · ${new Date(this.app.clock).toTimeString().slice(0, 5)}`),
+      s.replaceChildren(h('div', { class: 'pausebox' }, h('div', { class: 'app-heading' }, mark(), h('span', {}, 'Deskly')), h('h2', {}, 'Paused'), h('p', {}, `${this.cfg.company} · ${this.app.clockInfo?.label || ''} ${this.app.clockInfo?.time || ''}`),
         h('button', { class: 'mbtn primary', type: 'button', onclick: () => this.app.resume() }, h('b', {}, 'Resume')),
         h('button', { class: 'mbtn', type: 'button', onclick: () => this.app.openLaptop() }, h('b', {}, 'Open your laptop')),
         h('button', { class: 'mbtn', type: 'button', onclick: () => { this.app.resume(); setTimeout(() => this.app.ui.openMeeting(), 60); } }, h('b', {}, 'Call people')),

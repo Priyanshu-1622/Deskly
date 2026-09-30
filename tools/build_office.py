@@ -1001,19 +1001,22 @@ for mat, (x0, x1, z0, z1) in {
     "floor_polished": (13, 33, 0.15, 9.6), "tile": (0.15, 9, 0.15, 8), "concrete": (9, 13, 0.15, 8)}.items():
     add("Floor", [bx(mat, x0, x1, 0, FF, z0, z1)])
 add("Floor", [bx("tile", 33, 40, 0, FF, 0.15, 8), bx("floor_polished", 0.15, 13, 0, FF, 8, 9.6),
-              bx("floor_polished", 33, 59.85, 0, FF, 8, 9.6), bx("floor_polished", 0.15, 59.85, 0, FF, 26.4, 28),
+              bx("floor_polished", 33, 59.85, 0, FF, 8, 9.6), bx("floor_polished", 10, 59.85, 0, FF, 26.4, 28),
               bx("floor_polished", 16.5, 59.85, 0, FF, 16.6, 17.6)])
 # department carpets
-DEPT_FLOORS = [("carpet", 0.15, 16.5, 9.6, 26.4), ("carpet_design", 16.5, 24.5, 17.6, 26.4),
+DEPT_FLOORS = [("carpet", 0.15, 16.5, 9.6, 24.8), ("carpet", 10, 16.5, 24.8, 26.4),
+               ("carpet_design", 16.5, 24.5, 17.6, 26.4),
                ("carpet_mkt", 24.5, 33, 17.6, 26.4), ("carpet_hr", 33, 40, 17.6, 26.4),
                ("carpet_fin", 40, 46, 17.6, 26.4), ("carpet_res", 46, 59.85, 17.6, 26.4),
                ("wood_floor", 16.5, 30, 9.6, 16.6), ("carpet_sales", 30, 42, 9.6, 16.6),
                ("concrete", 42, 47, 9.6, 16.6), ("carpet_support", 47, 59.85, 9.6, 16.6)]
 for (m, x0, x1, z0, z1) in DEPT_FLOORS:
     add("Floor", [bx(m, x0, x1, 0, FF + 0.002, z0, z1)])
+# A distinct timber promenade makes the route to the CEO entrance readable.
+add("Floor", [bx("wood_floor", 7.55, 10.45, 0, FF + 0.005, 9.6, 24.8)])
 # south-east rooms and north band
 add("Floor", [bx("carpet_accent", 40, 49, 0, FF, 0.15, 8), bx("wood_floor", 49, 55.5, 0, FF, 0.15, 8),
-              bx("concrete", 55.5, 59.85, 0, FF, 0.15, 8), bx("wood_floor", 0.15, 10, 0, FF, 28, 35.85),
+              bx("concrete", 55.5, 59.85, 0, FF, 0.15, 8), bx("wood_floor", 0.15, 10, 0, FF, 24.8, 35.85),
               bx("carpet_accent", 10, 30, 0, FF, 28, 35.85), bx("carpet_hr", 30, 36, 0, FF, 28, 35.85),
               bx("carpet_fin", 36, 42, 0, FF, 28, 35.85), bx("concrete", 42, 45, 0, FF, 28, 35.85),
               bx("tile", 45, 56, 0, FF, 28, 35.85), bx("concrete", 56, 59.85, 0, FF, 28, 35.85)])
@@ -1060,7 +1063,8 @@ wall("Mail_Room", "x", 8, 55.5, 59.85, openings=[(56.8, 58.2, 0, 2.2, "door")])
 
 # north band (z 28..36)
 N0 = 28
-wall("CEO_Office", "x", N0, 0.15, 10, openings=[(8.2, 9.3, 0, 2.2, "door"), (1.5, 7.5, 1.0, 2.4, "window")])
+CEO_FRONT = 24.8
+wall("CEO_Office", "x", CEO_FRONT, 0.15, 10, openings=[(8.0, 9.55, 0, 2.4, "door"), (1.5, 6.8, 1.0, 2.4, "window")])
 glass_wall("Boardroom", "x", N0, 10, 18, doors=[(16.4, 17.5)])
 for (a, b, d) in ((18, 22, 20.6), (22, 26, 24.6), (26, 30, 28.6)):
     glass_wall("Meeting_Rooms", "x", N0, a, b, doors=[(d, d + 1.0)])
@@ -1069,17 +1073,18 @@ wall("Finance_Office", "x", N0, 36, 42, openings=[(36.4, 37.4, 0, 2.2, "door"), 
 wall("Server_Room", "x", N0, 42, 45, openings=[(42.4, 43.4, 0, 2.1, "door")])
 glass_wall("RnD_Lab", "x", N0, 45, 56, doors=[(45.4, 46.6)])
 wall("Fire_Stair", "x", N0, 56, 59.85, openings=[(56.3, 57.6, 0, 2.1, "exitdoor")])
-for x in (10, 18, 22, 26, 30, 36, 42, 45, 56):
+wall("Partitions", "z", 10, CEO_FRONT, D - TE)
+for x in (18, 22, 26, 30, 36, 42, 45, 56):
     wall("Partitions", "z", x, N0, D - TE)
 add("Boardroom", [bx("accent", 10.08, 10.12, 0, H, N0 + .1, D - .15)])
-add("CEO_Office", [bx("walnut", 9.88, 9.92, 0, H, N0 + .1, D - .15)])
+add("CEO_Office", [bx("walnut", 9.88, 9.92, 0, H, CEO_FRONT + .1, D - .15)])
 
 # room name signs over doors (read from corridor)
-for (txt, cx, zone) in (("CEO", 8.75, "CEO_Office"), ("BOARDROOM", 14, "Boardroom"), ("MEETING 1", 20, "Meeting_Rooms"),
+for (txt, cx, zone) in (("CEO", 8.78, "CEO_Office"), ("BOARDROOM", 14, "Boardroom"), ("MEETING 1", 20, "Meeting_Rooms"),
                         ("MEETING 2", 24, "Meeting_Rooms"), ("MEETING 3", 28, "Meeting_Rooms"), ("HR", 33, "HR_Office"),
                         ("FINANCE", 39, "Finance_Office"), ("SERVER", 43.5, "Server_Room"), ("R&D LAB", 50.5, "RnD_Lab"),
                         ("STAIRS", 58, "Fire_Stair")):
-    wall_text(zone, txt, "x", N0, cx, 2.55, -1, 0.035, "sign_dark", "whiteboard")
+    wall_text(zone, txt, "x", CEO_FRONT if zone == "CEO_Office" else N0, cx, 2.55, -1, 0.035, "sign_dark", "whiteboard")
 for (txt, cx, zone) in (("KITCHEN", 3.2, "Kitchen"), ("TRAINING", 44.5, "Training_Room"), ("WELLNESS", 50.75, "Wellness_Room"),
                         ("FIRST AID", 54.0, "First_Aid"), ("MAIL ROOM", 57.7, "Mail_Room")):
     wall_text(zone, txt, "x", 8, cx, 2.5, 1, 0.03 if len(txt) > 7 else 0.035, "sign_dark", "whiteboard")
@@ -1102,7 +1107,6 @@ place(Z, sofa(2.2, "sofa_green"), 14.9, 2.6, -90)
 place(Z, sofa(2.2, "sofa_green"), 25.1, 2.6, 90)
 place(Z, table_rect(0.6, 1.2, "walnut", 0.42), 15.9, 2.6)
 place(Z, table_rect(0.6, 1.2, "walnut", 0.42), 24.1, 2.6)
-place(Z, visitor_chair(), 16.2, 4.3, 180)
 place(Z, visitor_chair(), 23.8, 4.3, 180)
 place(Z, fiddle_fig(2.0), 13.7, 0.9)
 place(Z, monstera(1.1), 13.7, 7.1)
@@ -1110,7 +1114,6 @@ place(Z, fiddle_fig(2.0), 26.3, 0.9)
 place(Z, areca_palm(1.8), 17.6, 1.0)
 place(Z, areca_palm(1.8), 22.4, 1.0)
 add(Z, [bx("rug", 14.3, 17.2, 0, 0.015, 1.2, 4.0), bx("rug", 22.8, 25.7, 0, 0.015, 1.2, 4.0)])
-planter_strip(Z, "x", 7.9, 13.3, 15.6)
 planter_strip(Z, "x", 7.9, 24.4, 26.7)
 
 Z = "Kitchen"; CUR["room"] = Z
@@ -1226,6 +1229,7 @@ place(Z, printer(), 56.1, 6.5, -90)
 
 # ================================================================= NORTH BAND ROOMS (z 28..36)
 Z = "CEO_Office"; CUR["room"] = Z
+add(Z, [bx("rug", 1.0, 5.7, 0, 0.015, 25.2, 29.3)])
 add(Z, [bx("rug", 2.8, 7.4, 0, 0.015, 22.6 + NZ, 27.0 + NZ)])
 add(Z, [bx("walnut", 3.4, 6.6, 0.72, 0.77, 24.9 + NZ, 25.9 + NZ), bx("walnut", 3.4, 3.5, 0, 0.72, 24.9 + NZ, 25.9 + NZ),
         bx("walnut", 6.5, 6.6, 0, 0.72, 24.9 + NZ, 25.9 + NZ), bx("walnut", 3.5, 6.5, 0.2, 0.72, 24.9 + NZ, 24.95 + NZ),
@@ -1242,9 +1246,21 @@ place(Z, bookshelf(1.8), 9.65, 22.3 + NZ, 90)
 place(Z, bookshelf(1.8), 9.65, 24.2 + NZ, 90)
 place(Z, tv(1.4, 0.8, 1.3), 9.85, 26.3 + NZ, 90)
 place(Z, sofa(2.2, "leather"), 0.75, 23.6 + NZ, -90)
-place(Z, armchair("leather"), 2.6, 21.3 + NZ, 160)
+place(Z, armchair("leather"), 2.6, 21.7 + NZ, 160)
 place(Z, table_rect(0.6, 1.1, "walnut", 0.42), 1.8, 23.6 + NZ)
-round_meeting(Z, 7.5, 21.9 + NZ, 0.55, 3, "leather", "walnut")
+round_meeting(Z, 3.3, 27.3, 0.62, 4, "leather", "walnut")
+# The new southern half is a private briefing and work area. Keep the east
+# aisle from the entrance to the executive desk open for both player and team.
+place(Z, whiteboard(2.5, 1.25, 0.9), 0.2, 27.3, 90)
+place(Z, [marker("tvwatch", 0, 0, 1.6)] + tv(1.9, 1.05, 1.15, "screen_light"), 9.82, 29.0, -90)
+add(Z, [bx("walnut", 5.7, 7.0, 0, 0.71, 25.0, 25.65), bx("quartz", 5.65, 7.05, 0.71, 0.75, 24.98, 25.67)])
+place(Z, coffee_machine(), 6.25, 25.35, 0, 0.75)
+place(Z, printer(), 1.05, 25.65, 0)
+place(Z, safe(), 1.0, 34.3, 180)
+add(Z, [marker("archive", 1.0, 0, 34.2, fwd=(0, 0, 1))])
+# Floor lamp with a switch that controls its local light in the renderer.
+add(Z, [cyl("bronze", 0.75, 29.1, 0.16, 0, 0.035, 16), cyl("bronze", 0.75, 29.1, 0.018, 0.035, 1.7, 10),
+        cyl("softbox", 0.75, 29.1, 0.22, 1.67, 1.82, 20), marker("lamp", 0.75, 1.55, 29.1, fwd=(-1, 0, 0))])
 place(Z, fiddle_fig(2.1), 0.7, 27.2 + NZ)
 place(Z, areca_palm(1.9), 9.2, 27.2 + NZ)
 add(Z, [bx("accent_warm", 0.16, 0.2, 1.3, 2.3, 20.8 + NZ, 22.2 + NZ)])
@@ -1332,29 +1348,24 @@ place(Z, exit_sign(), 57.0, N0 - T / 2 - .01, 180, 2.25)
 # ================================================================= DEPARTMENTS (middle zone z 9.6..26.4)
 # ---- Engineering (programmers)  x 0.3..16.5, z 9.6..26.4
 Z = "Dept_Engineering"; CUR["room"] = Z
-for cx in (3.3, 8.3, 13.3):
+# Removing the middle desk bank opens a continuous 2.6 m route to the CEO door.
+for cx in (3.3, 13.3):
     for cz in (11.3, 14.5, 17.7, 20.9):
         place(Z, bench_cluster(3, "dev", "sign_eng"), cx, cz)
-# standing desks
-for x in (7.6, 9.2):
-    place(Z, desk(1.4, 0.7, "dev", False, 1.08), x, 23.6)
-    add(Z, [bx("black", x - 0.5, x + 0.5, 0, 0.015, 24.0, 24.6)])
-# huddle area: sofa + whiteboards + dashboards
-place(Z, mobile_whiteboard(2.0), 2.6, 26.0, 180)
-place(Z, mobile_whiteboard(2.0), 5.0, 26.0, 180)
-place(Z, sofa(2.2, "fabric_blue"), 3.8, 23.4, 180)
-place(Z, table_rect(1.0, 0.5, "oak", 0.42), 3.8, 24.6)
-place(Z, beanbag("sign_eng"), 1.2, 24.5)
-place(Z, beanbag("accent_warm"), 6.2, 24.8)
-place(Z, tv_stand(1.4, 0.8, "screen_code"), 10.3, 26.0, 180)
-place(Z, tv_stand(1.4, 0.8, "screen_code"), 11.8, 26.0, 180)
-place(Z, pod("sign_eng"), 13.4, 23.8, 0)
-place(Z, pod("sign_eng"), 15.2, 23.8, 0)
+# Engineering's huddle furniture stays west of the new route.
+place(Z, mobile_whiteboard(1.8), 2.4, 24.1, 180)
+place(Z, sofa(2.0, "fabric_blue"), 3.9, 23.35, 180)
+place(Z, table_rect(0.9, 0.5, "oak", 0.42), 3.9, 24.2)
+place(Z, pod("sign_eng"), 13.6, 24.0, 0)
+place(Z, pod("sign_eng"), 15.2, 24.0, 0)
 place(Z, locker_bank(8, "sign_eng"), 2.4, 8.35 - 0.0, 0)
-place(Z, locker_bank(8, "sign_eng"), 11.0, 8.35, 0)
+place(Z, locker_bank(8, "sign_eng"), 5.8, 8.35, 0)
 place(Z, fiddle_fig(1.9), 0.7, 22.4)
-place(Z, areca_palm(1.8), 6.6, 22.4)
+place(Z, areca_palm(1.8), 1.0, 21.9)
 hang(Z, "ENGINEERING", "sign_eng", 8.3, 16.1)
+hang(Z, "CEO OFFICE", "walnut", 11.2, 8.7)
+hang(Z, "CEO OFFICE", "walnut", 9.1, 10.4)
+hang(Z, "CEO", "walnut", 9.1, 21.9)
 planter_strip(Z, "z", 16.5, 18.0, 21.7)
 planter_strip(Z, "z", 16.5, 22.7, 26.0)
 planter_strip(Z, "z", 16.5, 10.0, 13.0)

@@ -12,8 +12,50 @@
       const hemi = new T.HemisphereLight(0xffffff, 0x8a8478, 0.95);
       const sun = new T.DirectionalLight(0xfff4e2, 0.85); sun.position.set(40, 60, -30);
       const fill = new T.DirectionalLight(0xdfe9ff, 0.25); fill.position.set(-30, 25, 50);
-      this.scene.add(hemi, sun, fill);
+      const moon = new T.DirectionalLight(0xb8d0ff, 0);
+      const sky = DesklyOfficeSky.create(T);
+      const indoor = [[8, 16], [20, 16], [31, 16], [43, 16], [54, 16], [8, 31], [17, 31], [28, 31], [40, 31], [53, 31], [20, 5]]
+        .map(([x, z]) => { const l = new T.PointLight(0xffe6bf, 0, 13, 2); l.position.set(x, 2.9, z); return l; });
+      Object.assign(this, { hemi, sun, fill, moon, sky, indoor, lightingMode: 'day' });
+      this.scene.add(hemi, sun, fill, moon, sky.mesh, ...indoor);
       this.doors = []; this.lifts = []; this.screens = [];
+      this.setTime(DesklyOfficeTime.info(new Date()));
+    }
+
+    setLighting(mode = 'day') {
+      if (!['day', 'focus', 'evening'].includes(mode)) return;
+      this.lightingMode = mode;
+      this.setTime(this.clockInfo || DesklyOfficeTime.info(new Date()));
+    }
+
+    setTime(clock) {
+      this.clockInfo = clock;
+      const position = DesklyOfficeTime.solar(clock);
+      const smooth = (a, b, n) => { const t = Math.max(0, Math.min(1, (n - a) / (b - a))); return t * t * (3 - 2 * t); };
+      const day = smooth(-8, 7, position.elevation);
+      const twilight = smooth(-12, -1, position.elevation) * (1 - smooth(4, 18, position.elevation));
+      const s = position.sun, m = position.moon;
+      this.sky.uniforms.sunDir.value.set(s.x, s.y, s.z);
+      this.sky.uniforms.moonDir.value.set(m.x, m.y, m.z);
+      this.sky.uniforms.daylight.value = day;
+      this.sky.uniforms.twilight.value = twilight;
+      this.sky.uniforms.moonPhase.value = position.phase;
+      this.sun.position.set(s.x * 70, s.y * 70, s.z * 70);
+      this.sun.color.set('#ffffff').lerp(new T.Color('#ffab68'), twilight * 0.7);
+      this.sun.intensity = Math.max(0, s.y) * 1.05 * (this.lightingMode === 'focus' ? 0.8 : 1);
+      this.moon.position.set(m.x * 70, m.y * 70, m.z * 70);
+      this.moon.intensity = Math.max(0, m.y) * (1 - day) * (0.08 + 0.09 * Math.abs(Math.sin(Math.PI * position.phase)));
+      this.hemi.intensity = 0.16 + day * (this.lightingMode === 'focus' ? 0.66 : 0.84);
+      this.fill.intensity = 0.1 + day * 0.17;
+      const interior = (1 - smooth(-3, 15, position.elevation)) * (this.lightingMode === 'focus' ? 0.72 : 0.88);
+      for (const light of this.indoor) light.intensity = interior;
+      const haze = new T.Color('#14243a').lerp(new T.Color('#bad9e9'), day).lerp(new T.Color('#df8d62'), twilight * 0.44);
+      this.scene.fog.color.copy(haze);
+      this.renderer.toneMappingExposure = 1.05 + (1 - day) * 0.13;
+    }
+
+    setCeoLamp(on) {
+      if (this.ceoLamp) this.ceoLamp.intensity = on ? 1.25 : 0;
     }
 
     async load(onProgress) {
@@ -23,9 +65,21 @@
       ]);
       onProgress?.('Unpacking the office…');
       const gltf = await new Promise((res, rej) => new T.GLTFLoader().parse(b64, '', res, rej));
+      onProgress?.('Finishing office surfaces…');
+      this.officeMaterials = await DesklyOfficeMaterials.apply(gltf.scene, T);
+      const reflections = await new Promise((resolve, reject) => new T.TextureLoader().load(
+        'assets/materials/office-reflections.jpg', resolve, undefined, reject));
+      reflections.mapping = T.EquirectangularReflectionMapping;
+      reflections.encoding = T.sRGBEncoding;
+      this.scene.environment = reflections;
+      const glass = new T.MeshPhysicalMaterial({ color: '#c7e0e7', metalness: 0, roughness: 0.08,
+        clearcoat: 1, clearcoatRoughness: 0.045, transparent: true, opacity: 0.27,
+        depthWrite: false, side: T.DoubleSide, envMapIntensity: 0.55 });
+      this.officeMaterials.materials.set('glass', glass);
       gltf.scene.traverse(o => {
         if (o.isMesh) {
           o.matrixAutoUpdate = false; o.updateMatrix();
+          if (o.material.name === 'glass') o.material = glass;
           const m = o.material;
           if (m.transparent) { m.depthWrite = false; o.renderOrder = 2; }
           if (/^screen/.test(m.name)) m.emissiveIntensity = 0.45;
@@ -34,9 +88,28 @@
       this.scene.add(gltf.scene);
       this.data = data;
       this.markers = data.markers;
+      const lamp = this.markers.find(m => m.kind === 'lamp' && m.room === 'CEO_Office');
+      if (lamp) {
+        this.ceoLamp = new T.PointLight(0xffdfac, 0, 4.6, 2);
+        this.ceoLamp.position.set(lamp.p[0], 1.55, lamp.p[2]);
+        this.scene.add(this.ceoLamp);
+      }
       this.buildDoors(data.doors);
       this.buildLifts(data.lifts);
       return data;
+    }
+
+    finish(mesh, name) {
+      const material = this.officeMaterials?.materials.get(name);
+      if (material) {
+        mesh.material = material;
+        if (name !== 'glass') {
+          const group = DesklyOfficeMaterials.groupFor(name);
+          const metres = { oak: 0.9, concrete: 1.4, metal: 0.72 }[group];
+          if (metres) mesh.geometry = DesklyOfficeMaterials.projectUV(mesh.geometry, metres, T);
+        }
+      }
+      return mesh;
     }
 
     buildDoors(doors) {
@@ -51,11 +124,12 @@
         const door = { d, c, kind, open: 0, panels: [] };
         const makePanel = (pw, mat) => {
           const g = new T.Group();
-          const p = new T.Mesh(new T.BoxGeometry(pw, h, 0.045), mat); p.position.set(pw / 2, h / 2 + 0.01, 0); g.add(p);
+          const p = new T.Mesh(new T.BoxGeometry(pw, h, 0.045), mat); p.position.set(pw / 2, h / 2 + 0.01, 0);
+          this.finish(p, mat === glass ? 'glass' : mat === wood ? 'door_wood' : 'steel'); g.add(p);
           if (mat !== glass) {
-            const hd = new T.Mesh(new T.BoxGeometry(0.03, 0.02, 0.2), chrome); hd.position.set(pw - 0.1, 1.02, 0); g.add(hd);
+            const hd = this.finish(new T.Mesh(new T.BoxGeometry(0.03, 0.02, 0.2), chrome), 'chrome'); hd.position.set(pw - 0.1, 1.02, 0); g.add(hd);
           } else {
-            const hd = new T.Mesh(new T.BoxGeometry(0.025, 0.8, 0.12), chrome); hd.position.set(pw - 0.09, 1.1, 0); g.add(hd);
+            const hd = this.finish(new T.Mesh(new T.BoxGeometry(0.025, 0.8, 0.12), chrome), 'chrome'); hd.position.set(pw - 0.09, 1.1, 0); g.add(hd);
           }
           if (d.axis === 'z') g.rotation.y = -Math.PI / 2;
           this.scene.add(g); return g;
@@ -83,7 +157,7 @@
       const steel = new T.MeshStandardMaterial({ color: '#b3b7bc', roughness: 0.25, metalness: 0.85 });
       for (const L of lifts) {
         const w = (L.x1 - L.x0) / 2;
-        const a = new T.Mesh(new T.BoxGeometry(w, 2.2, 0.03), steel), b = a.clone();
+        const a = this.finish(new T.Mesh(new T.BoxGeometry(w, 2.2, 0.03), steel), 'steel'), b = a.clone();
         a.position.set(L.x0 + w / 2, 1.1, L.z); b.position.set(L.x1 - w / 2, 1.1, L.z);
         this.scene.add(a, b);
         this.lifts.push({ ...L, a, b, open: 0, want: 0, ax: a.position.x, bx: b.position.x, w });

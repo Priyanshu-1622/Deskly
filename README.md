@@ -29,11 +29,32 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
   <br><sub>Call the whole team to the boardroom, take your seat, and lead the meeting.</sub>
 </p>
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/sky-sunset.png" alt="Golden sunset over the Deskly office beneath a clouded sky" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/ceo-office.png" alt="Expanded CEO office with a briefing table, lounge, and work areas" width="100%"></td>
+  </tr>
+  <tr><td><b>Watch the office change with the day.</b> The regional clock drives sunlight, clouds, sunset, and night.</td><td><b>Make the CEO office your own.</b> Walk in along a clear aisle and use the room's interactive work areas.</td></tr>
+</table>
+
 <details>
   <summary>See the office floor</summary>
   <br><img src="docs/screenshots/office.png" alt="First-person view inside the Deskly office" width="100%">
 </details>
 
+<details>
+  <summary>See the new route and CEO office</summary>
+  <br><img src="docs/screenshots/ceo-route.png" alt="Clear wood aisle leading to the CEO office" width="100%">
+</details>
+
+<details>
+  <summary>See sunset and the office after dark</summary>
+  <br><img src="docs/screenshots/sky-night.png" alt="Empty office with indoor lights beneath a night sky" width="100%">
+</details>
+
+<details>
+  <summary>See the team and project tools</summary>
+  <br>
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/employee.png" alt="Employee panel with a skills and knowledge resume, task controls, and demo mode notice" width="100%"></td>
@@ -41,12 +62,14 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
   </tr>
   <tr><td><b>Meet your team.</b> Each person has skills, knowledge, editable work instructions, an AI setup, and a task history.</td><td><b>Work from your desk.</b> Browse and edit your project, use a terminal, ask your assistant, or delegate to an employee.</td></tr>
 </table>
+</details>
 
 ## What is working today
 
 | Area | What you can do |
 | --- | --- |
-| 3D office | Walk in first person; meet employees at their desks; sit in an available meeting chair; use the operations board, rooms, meetings, and your laptop. Idle employees animate without making AI calls. |
+| 3D office | Walk in first person through the original office model with photographed PBR surfaces. A clear, signed aisle leads to an expanded CEO office with a briefing table, whiteboard, display, coffee station, printer, report archive, and switchable lamp. Sit in available chairs, use room whiteboards, printers, presentation screens, drinks, meetings, the operations board, and your laptop. Idle employees animate without making AI calls. |
+| Office day | Use the real date and time for your device or select one of ten world regions in Settings. The sky changes through sunrise, daylight, sunset, and moonlit night; indoor lights respond. A fast preview lets you watch the cycle. Employees begin leaving at 18:00. Call the whole team back and keep them through the night and across restarts until you send them home. |
 | Your team | Hire from role presets, edit work instructions and appearance, and inspect a skills and knowledge resume for each employee. |
 | AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, or an OpenAI-compatible endpoint per employee. The laptop assistant can use a separate setup. |
 | Project work | Assign tasks against a selected project folder. An employee plans, reads and writes files, reports progress, and returns a result for review. |
@@ -84,6 +107,8 @@ The repository also declares `dist:mac` and `dist:linux` targets. Run those on t
 | **W A S D** / **Shift** | Walk / move faster |
 | **Mouse** | Look around; click the office view to capture the pointer |
 | **E** | Talk, interact, or sit in an available chair |
+| **F** / **R** | Drink what you are holding / discard the cup |
+| **P** | Toggle a clean photo mode |
 | **L** | Open your laptop |
 | **Tab** | Open the operations board |
 | **C** | Call people to your office or a meeting room |

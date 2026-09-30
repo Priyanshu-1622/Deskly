@@ -70,3 +70,33 @@ test('a full boardroom meeting reserves the founder chair and keeps overflow off
   assert.equal(next.playerSeat, chosenChair);
   assert.ok(people.every(e => e.meetSeat !== chosenChair));
 });
+
+test('office life saves boards, feedback and meeting actions without provider calls', () => {
+  const data = new Map();
+  const localStorage = { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value) };
+  const window = {};
+  const source = fs.readFileSync(path.join(__dirname, '../src/renderer/js/office-life.js'), 'utf8');
+  vm.runInNewContext(source, { window, localStorage, setTimeout, clearTimeout, Date, console });
+  let providerCalls = 0;
+  const employee = { id: 'dev', name: 'Dev One', say() {}, activity: 'Working' };
+  const app = {
+    runtime: {
+      activeFor: () => ({ title: 'Build interactions', status: 'running', progress: 0.5 }),
+      latestFor: () => null,
+      list: () => [], get: () => null
+    },
+    office: { employees: [employee] },
+    ui: { toast() {} },
+    world: { setLighting() {} },
+    provider: { call() { providerCalls++; } }
+  };
+  const life = new window.DesklyOfficeLife.OfficeLife(app);
+  life.saveBoard('Boardroom', 'Ship the interaction pass');
+  life.feedback(employee, 'positive');
+  const summary = life.finishMeeting({ room: 'Boardroom', topic: 'Office life', people: [employee], lines: [{ e: employee, l: 'Coffee is now drinkable.' }], actions: ['Test every chair'] });
+  assert.equal(life.board('Boardroom').text.includes('Test every chair'), true);
+  assert.equal(life.state.feedback.dev.positive, 1);
+  assert.equal(summary.includes('Coffee is now drinkable.'), true);
+  assert.equal(life.statusLine(employee).includes('50%'), true);
+  assert.equal(providerCalls, 0);
+});
