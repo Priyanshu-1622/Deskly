@@ -63,12 +63,14 @@
       const t = { id: uid('task'), employeeId, employeeName: e?.name, role: e?.role, title: description.slice(0, 60), description, status: 'created', progress: 0, steps: [], step: -1, logs: [], files: [], result: null, createdAt: now(), updatedAt: now() };
       tasks.set(t.id, t); emit('task.created', { taskId: t.id, employeeId, title: t.title }); run(t); return pub(t);
     },
+    tasksResume: async () => { throw new Error('Resuming work requires the desktop app.'); },
     tasksCancel: async id => { const t = tasks.get(id); if (!t) return; t.status = 'cancelled'; t.error = 'Stopped by you'; for (const a of approvals.values()) if (a.taskId === id && a.status === 'pending') { a.status = 'cancelled'; a.res(false); } emit('task.status_changed', { taskId: id, employeeId: t.employeeId, status: 'cancelled' }); },
     tasksClear: async () => { for (const [id, t] of tasks) if (['completed', 'failed', 'cancelled'].includes(t.status)) tasks.delete(id); emit('runtime.history_cleared'); },
     tasksReviewed: async id => { const t = tasks.get(id); if (t) t.reviewed = true; emit('task.reviewed', { taskId: id, employeeId: t?.employeeId }); },
     approvalRespond: async (id, d) => { const a = approvals.get(id); if (!a || a.status !== 'pending') return false; a.status = d; emit('approval.responded', { approvalId: id, taskId: a.taskId, employeeId: a.employeeId, decision: d }); a.res(d === 'approved'); return true; },
     memoryList: async id => get('memories', []).filter(m => m.employeeId === id),
-    memoryAdd: async (employeeId, scope, text) => { const all = get('memories', []); const note = { id: uid('memory'), employeeId, scope, text: String(text).slice(0, 700), source: 'founder', createdAt: now() }; all.push(note); put('memories', all); return note; },
+    memoryAdd: async (employeeId, scope, text, kind = 'fact') => { const all = get('memories', []); const note = { id: uid('memory'), employeeId, scope, text: String(text).slice(0, 700), kind, status: 'verified', source: 'founder', createdAt: now() }; all.push(note); put('memories', all); return note; },
+    memoryUpdate: async (employeeId, id, patch) => { const all = get('memories', []); const note = all.find(m => m.id === id && m.employeeId === employeeId); if (!note) throw new Error('Memory not found.'); Object.assign(note, patch); put('memories', all); return note; },
     memoryDelete: async id => { const all = get('memories', []); put('memories', all.filter(m => m.id !== id)); return true; },
     teamUpdates: async () => [],
     usageGet: async () => [],

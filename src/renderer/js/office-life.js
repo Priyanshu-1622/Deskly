@@ -44,10 +44,10 @@
     activate(kind, marker) {
       if (kind === 'coffee' || kind === 'water') return this.takeDrink(kind);
       if (kind === 'lift') return this.callLift(marker.lift);
-      if (kind === 'whiteboard') return this.app.ui.openWhiteboard(marker, this);
-      if (kind === 'printer') return this.app.ui.openPrinter(marker, this);
-      if (kind === 'display') return this.app.ui.openPresentationDisplay(marker, this);
-      if (kind === 'archive') return this.app.ui.openCeoArchive(marker, this);
+      if (kind === 'whiteboard') { this.app.audio?.play('paper'); return this.app.ui.openWhiteboard(marker, this); }
+      if (kind === 'printer') { this.app.audio?.play('printer'); return this.app.ui.openPrinter(marker, this); }
+      if (kind === 'display') { this.app.audio?.play('switch'); return this.app.ui.openPresentationDisplay(marker, this); }
+      if (kind === 'archive') { this.app.audio?.play('paper'); return this.app.ui.openCeoArchive(marker, this); }
       if (kind === 'lamp') return this.toggleCeoLamp();
     }
     takeDrink(type) {
@@ -57,13 +57,13 @@
         return;
       }
       this.app.player.giveDrink(type);
-      this.sound(type === 'coffee' ? 190 : 260, 0.08);
+      this.app.audio?.play('pour', { water: type === 'water' });
       this.app.ui.toast(type === 'coffee' ? 'Fresh coffee. Press F to take a sip · R to discard.' : 'Water cup filled. Press F to drink · R to discard.', type === 'coffee' ? '#c08a5a' : '#6fa8c9');
     }
     sip() {
       const result = this.app.player.drink();
       if (!result) return false;
-      this.sound(result.type === 'coffee' ? 130 : 210, 0.12);
+      this.app.audio?.play('sip', { water: result.type === 'water' });
       this.app.ui.toast(result.empty ? `${result.type === 'coffee' ? 'Coffee' : 'Water'} finished. Press R to discard the empty cup.` : `${result.type === 'coffee' ? 'Coffee' : 'Water'} · ${result.remaining} sips left.`, result.type === 'coffee' ? '#c08a5a' : '#6fa8c9');
       return true;
     }
@@ -71,24 +71,14 @@
       if (!this.app.player.discardDrink()) return false;
       this.state.discarded++;
       this.save();
-      this.sound(90, 0.06);
+      this.app.audio?.play('cup');
       this.app.ui.toast('Cup discarded.', '#a4a592');
       return true;
-    }
-    sound(freq, duration) {
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        this.audio ||= new AC();
-        const osc = this.audio.createOscillator(), gain = this.audio.createGain();
-        osc.frequency.value = freq; gain.gain.setValueAtTime(0.025, this.audio.currentTime); gain.gain.exponentialRampToValueAtTime(0.0001, this.audio.currentTime + duration);
-        osc.connect(gain); gain.connect(this.audio.destination); osc.start(); osc.stop(this.audio.currentTime + duration);
-      } catch { }
     }
     callLift(lift) {
       if (!lift) return;
       lift.want = 1;
-      this.sound(440, 0.18);
+      this.app.audio?.play('lift');
       this.app.ui.toast('Lift called. The doors will stay open for a few seconds.', '#f2c230');
       clearTimeout(lift.officeLifeTimer);
       lift.officeLifeTimer = setTimeout(() => { lift.want = 0; }, 6500);
@@ -126,7 +116,7 @@
       this.state.ceoLamp = !this.state.ceoLamp;
       this.save();
       this.app.world.setCeoLamp?.(this.state.ceoLamp);
-      this.sound(this.state.ceoLamp ? 360 : 220, 0.06);
+      this.app.audio?.play('switch');
       this.app.ui.toast(`Office lamp ${this.state.ceoLamp ? 'on' : 'off'}.`, '#f2c230');
     }
     statusLine(e) {

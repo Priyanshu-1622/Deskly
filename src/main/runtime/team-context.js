@@ -29,7 +29,7 @@ class TeamContext {
     if (fs.existsSync(this.file)) fs.copyFileSync(this.file, this.file + '.bak');
     fs.renameSync(tmp, this.file);
   }
-  addMemory({ employeeId, projectRoot, scope = 'project', text, source = 'employee' }) {
+  addMemory({ employeeId, projectRoot, scope = 'project', text, source = 'employee', kind = 'fact', evidence = '' }) {
     const value = String(text || '').trim().slice(0, 700);
     if (!employeeId || !value) throw new Error('Memory needs an employee and a note.');
     if (!['project', 'global'].includes(scope)) throw new Error('Memory scope must be project or global.');
@@ -37,7 +37,10 @@ class TeamContext {
     if (scope === 'project' && !projectId) throw new Error('Choose a project folder before saving project memory.');
     const existing = this.data.memories.find(m => m.employeeId === employeeId && m.projectId === projectId && m.text === value);
     if (existing) return existing;
-    const note = { id: crypto.randomUUID(), employeeId, projectId, scope, text: value, source, createdAt: new Date().toISOString() };
+    const note = { id: crypto.randomUUID(), employeeId, projectId, scope, text: value, source,
+      kind: ['fact', 'decision', 'preference', 'lesson'].includes(kind) ? kind : 'fact',
+      status: source === 'founder' ? 'verified' : 'unverified', evidence: String(evidence || '').slice(0, 300),
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     this.data.memories.push(note);
     this.data.memories = this.data.memories.slice(-500);
     this.save();
@@ -45,18 +48,41 @@ class TeamContext {
   }
   memoriesFor(employeeId, projectRoot, limit = 12, query = '') {
     const projectId = this.projectId(projectRoot);
-    const matches = this.data.memories.filter(m => m.employeeId === employeeId && (m.scope === 'global' || (projectId && m.projectId === projectId)));
+    const matches = this.data.memories.filter(m => m.employeeId === employeeId && m.status !== 'outdated' && (m.scope === 'global' || (projectId && m.projectId === projectId)));
     const words = new Set(String(query).toLowerCase().match(/[a-z0-9]{4,}/g) || []);
     if (!words.size) return matches.slice(-Math.min(50, limit));
     return matches.map((m, index) => ({ m, index, score: [...words].filter(w => m.text.toLowerCase().includes(w)).length }))
       .sort((a, b) => b.score - a.score || b.index - a.index).slice(0, Math.min(50, limit))
       .sort((a, b) => a.index - b.index).map(x => x.m);
   }
+  listMemories(employeeId, projectRoot) {
+    const projectId = this.projectId(projectRoot);
+    return this.data.memories.filter(m => m.employeeId === employeeId && (m.scope === 'global' || (projectId && m.projectId === projectId)));
+  }
   deleteMemory(id) {
     const before = this.data.memories.length;
     this.data.memories = this.data.memories.filter(m => m.id !== id);
     if (before !== this.data.memories.length) this.save();
     return before !== this.data.memories.length;
+  }
+  updateMemory(id, employeeId, patch = {}) {
+    const note = this.data.memories.find(m => m.id === id && m.employeeId === employeeId);
+    if (!note) throw new Error('Memory note not found for this employee.');
+    if (patch.status !== undefined) {
+      if (!['verified', 'unverified', 'outdated'].includes(patch.status)) throw new Error('Unknown memory status.');
+      note.status = patch.status;
+    }
+    if (patch.kind !== undefined) {
+      if (!['fact', 'decision', 'preference', 'lesson'].includes(patch.kind)) throw new Error('Unknown memory type.');
+      note.kind = patch.kind;
+    }
+    if (patch.text !== undefined) {
+      const value = String(patch.text).trim();
+      if (!value || value.length > 700) throw new Error('Memory must be 1–700 characters.');
+      note.text = value;
+    }
+    note.updatedAt = new Date().toISOString();
+    this.save(); return note;
   }
   post({ from, to = 'all', projectRoot, taskId, text, files = [], contract = '', needs = '' }) {
     const projectId = this.projectId(projectRoot);

@@ -23,7 +23,7 @@
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('small', {}, hint) : null);
   const mark = (extra = '') => h('img', { class: `deskly-mark ${extra}`.trim(), src: 'assets/deskly-icon.png', alt: '' });
 
-  const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'high', nameTags: true, timeZone: 'auto', timeMode: 'real' };
+  const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'high', nameTags: true, timeZone: 'auto', timeMode: 'real', soundVolume: 0.65 };
 
   class Screens {
     constructor(app) {
@@ -145,10 +145,10 @@
         wrap.replaceChildren(...[
           h('div', { class: 'grid2' },
             field('Provider', h('select', { onchange: e => { o.provider = e.target.value; o.model = ''; render(); } }, ...Object.entries(provs).map(([k, v]) => h('option', { value: k, selected: k === (o.provider || 'demo') }, v.label)))),
-            field('Model', h('input', { type: 'text', value: o.model || '', placeholder: p.defaultModel || 'model name', oninput: e => { o.model = e.target.value.trim(); } }), o.provider === 'gemini' ? 'Recommended for new free-tier projects: gemini-3.5-flash-lite. Clear this field to use the default.' : null)),
-          o.provider && o.provider !== 'demo' ? field('Lightweight model (optional)', h('input', { type: 'text', value: o.lightweightModel || '', placeholder: 'Same provider, smaller model', oninput: e => { o.lightweightModel = e.target.value.trim(); } }), 'Used for plans, short conversations and meeting ideas. The main model handles task execution; failures fall back to it.') : null,
+            field('Model', h('input', { type: 'text', value: o.model || '', placeholder: p.localCli ? 'Installed CLI default' : p.defaultModel || 'model name', oninput: e => { o.model = e.target.value.trim(); } }), p.localCli ? 'Leave empty to use the model selected in the installed CLI.' : o.provider === 'gemini' ? 'Recommended for new free-tier projects: gemini-3.5-flash-lite. Clear this field to use the default.' : null)),
+          o.provider && o.provider !== 'demo' && !p.localCli ? field('Lightweight model (optional)', h('input', { type: 'text', value: o.lightweightModel || '', placeholder: 'Same provider, smaller model', oninput: e => { o.lightweightModel = e.target.value.trim(); } }), 'Used for plans, short conversations and meeting ideas. The main model handles task execution; failures fall back to it.') : null,
           ['custom', 'ollama'].includes(o.provider) ? field('Base URL', h('input', { type: 'text', value: o.baseUrl || '', placeholder: p.baseUrl || 'https://your-endpoint/v1', oninput: e => { o.baseUrl = e.target.value.trim(); } })) : null,
-          o.provider && o.provider !== 'demo' ? h('div', { class: 'grid2' },
+          p.localCli ? h('p', { class: 'note' }, 'Uses the installed CLI and its own sign-in. Deskly sends prompts to the CLI while Deskly keeps file changes, commands, and approvals under its own controls. No API key is stored here.') : o.provider && o.provider !== 'demo' ? h('div', { class: 'grid2' },
             field('API key', keyInput, hasKey ? 'A key is saved. Leave empty to keep it.' : 'Save key & test stores it securely, including when the model test fails.'),
             id !== 'assistant' ? field('Or reuse a key', h('select', { onchange: e => { o.keyFrom = e.target.value || undefined; } }, ...others.map(([v, l]) => h('option', { value: v, selected: (o.keyFrom || '') === v }, l)))) : h('span')) : h('p', { class: 'note' }, 'Demo mode simulates the whole flow without calling any AI.'),
           h('div', { class: 'row' },
@@ -156,7 +156,7 @@
               status.textContent = 'Testing…'; status.className = 'test';
               let saved = false;
               try {
-                if (this.pendingKeys[id]) {
+                if (this.pendingKeys[id] && !p.localCli) {
                   this.keys = await DK.secretSet(id, this.pendingKeys[id]);
                   delete this.pendingKeys[id];
                   keyInput.value = '';
@@ -170,8 +170,8 @@
                 status.textContent = `${saved ? 'Key saved securely · ' : ''}${e.message}`;
                 status.className = 'test bad';
               }
-            } }, 'Save key & test connection') : null,
-            hasKey ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
+            } }, p.localCli ? 'Check installed login' : 'Save key & test connection') : null,
+            hasKey && !p.localCli ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
               try { this.keys = await DK.secretSet(id, ''); delete this.pendingKeys[id]; render(); }
               catch (e) { status.textContent = e.message; status.className = 'test bad'; }
             } }, 'Delete saved key') : null,
@@ -230,7 +230,7 @@
               h('h3', {}, 'AI brain'), this.aiFields(e, e.id, draft),
               h('div', { class: 'row' },
                 h('button', { class: 'btn ghost', type: 'button', onclick: () => {
-                  draft.employees.forEach(o => { if (o !== e) { o.provider = e.provider; o.model = e.model; o.baseUrl = e.baseUrl; o.keyFrom = e.id; } });
+                  draft.employees.forEach(o => { if (o !== e) { o.provider = e.provider; o.model = e.model; o.baseUrl = e.baseUrl; o.keyFrom = this.providers()[e.provider]?.localCli ? undefined : e.id; } });
                   this.flash(`Everyone now uses ${e.name.split(' ')[0]}'s provider and key.`); renderList();
                 } }, 'Use this AI setup for the whole team'),
                 h('button', { class: 'btn danger', type: 'button', onclick: () => { draft.employees = draft.employees.filter(x => x !== e); sel = draft.employees[0]?.id; renderList(); renderEdit(); } }, 'Remove from team'))),
@@ -298,6 +298,7 @@
         else if (cur === 'memory') body = this.memoryPanel(draft);
         else if (cur === 'assistant') body = h('div', { class: 'sbody narrow' }, h('p', { class: 'lead' }, 'The assistant on your laptop. It sees the file you have open when you ask about it.'), this.aiFields(draft.assistant = draft.assistant || { provider: 'demo' }, 'assistant', draft));
         else if (cur === 'controls') body = h('div', { class: 'sbody narrow' },
+          field(`Office sounds · ${Math.round(st.soundVolume * 100)}%`, h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: st.soundVolume, oninput: e => { st.soundVolume = +e.target.value; e.target.parentNode.firstChild.textContent = `Office sounds · ${Math.round(st.soundVolume * 100)}%`; this.app.audio?.setVolume(st.soundVolume); }, onchange: () => this.app.audio?.play('cup') }), 'Footsteps, drinks, doors, chairs, and office objects. Set to 0 to mute.'),
           field(`Mouse sensitivity · ${st.sensitivity.toFixed(2)}×`, h('input', { type: 'range', min: 0.3, max: 2.5, step: 0.05, value: st.sensitivity, oninput: e => { st.sensitivity = +e.target.value; e.target.parentNode.firstChild.textContent = `Mouse sensitivity · ${st.sensitivity.toFixed(2)}×`; } })),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.invertY, onchange: e => { st.invertY = e.target.checked; } }), 'Invert vertical look'),
           field(`Field of view · ${st.fov}°`, h('input', { type: 'range', min: 55, max: 100, step: 1, value: st.fov, oninput: e => { st.fov = +e.target.value; e.target.parentNode.firstChild.textContent = `Field of view · ${st.fov}°`; } })),
@@ -328,6 +329,7 @@
     }
     closeSettings(saved) {
       if (saved) { this.app.applySettings(); this.flash('Settings saved.'); }
+      else this.app.audio?.setVolume(this.settings().soundVolume);
       if (this.app.playing || this.settingsFrom === 'screen-pause') this.pause(); else this.start();
     }
 
@@ -339,12 +341,17 @@
       const usage = h('div', { class: 'memory-list' });
       const noteInput = h('textarea', { rows: 3, placeholder: 'A stable preference, decision, or useful project fact' });
       const scopeInput = h('select', {}, h('option', { value: 'project' }, 'This project only'), h('option', { value: 'global' }, 'Across projects'));
+      const kindInput = h('select', {}, ...[['fact', 'Project fact'], ['decision', 'Decision'], ['preference', 'Preference'], ['lesson', 'Lesson learned']].map(([value, label]) => h('option', { value }, label)));
       const refresh = async () => {
         try {
           const [saved, recent, rows] = await Promise.all([selected ? DK.memoryList(selected) : [], DK.teamUpdates(), DK.usageGet()]);
           notes.replaceChildren(...(saved.length ? saved.slice().reverse().map(m => h('div', { class: 'memory-row' },
-            h('span', {}, h('b', {}, m.scope === 'global' ? 'Across projects' : 'This project'), ' · ', m.text),
-            h('button', { class: 'btn ghost', type: 'button', onclick: async () => { await DK.memoryDelete(m.id); refresh(); } }, 'Remove'))) : [h('p', { class: 'note' }, 'No saved notes yet.') ]));
+            h('span', {}, h('b', {}, `${m.kind || 'fact'} · ${m.status || 'unverified'} · ${m.scope === 'global' ? 'across projects' : 'this project'}`), ' · ', m.text,
+              h('small', {}, ` Source: ${m.source || 'unknown'} · ${new Date(m.updatedAt || m.createdAt).toLocaleDateString()}`)),
+            h('div', { class: 'row' },
+              m.status !== 'verified' ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => { await DK.memoryUpdate(selected, m.id, { status: 'verified' }); refresh(); } }, 'Verify') : null,
+              m.status !== 'outdated' ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => { await DK.memoryUpdate(selected, m.id, { status: 'outdated' }); refresh(); } }, 'Outdated') : null,
+              h('button', { class: 'btn ghost', type: 'button', onclick: async () => { await DK.memoryDelete(m.id); refresh(); } }, 'Remove')))) : [h('p', { class: 'note' }, 'No saved notes yet.') ]));
           updates.replaceChildren(...(recent.length ? recent.slice().reverse().slice(0, 12).map(u => h('p', {}, h('b', {}, people.find(e => e.id === u.from)?.name || u.from), ' → ', u.to === 'all' ? 'team' : (people.find(e => e.id === u.to)?.name || u.to), ': ', u.text,
             u.files?.length ? h('small', {}, ' Files: ' + u.files.join(', ')) : null,
             u.contract ? h('small', {}, ' Interface: ' + u.contract) : null,
@@ -355,13 +362,13 @@
         } catch (e) { this.flash(e.message || 'Could not load memory and usage.'); }
       };
       const panel = h('div', { class: 'sbody narrow' },
-        h('p', { class: 'lead' }, 'Each employee keeps local project notes and approved cross-project notes. Teammate updates appear when the recipient is working; idle characters use no AI.'),
+        h('p', { class: 'lead' }, 'Each employee keeps dated project facts, decisions, preferences, and lessons. Verify a useful note or mark an old one outdated. Teammate updates appear when the recipient is working; idle characters use no AI.'),
         field('Employee', h('select', { onchange: e => { selected = e.target.value; refresh(); } }, ...people.map(e => h('option', { value: e.id }, e.name)))),
         h('h3', {}, 'Saved notes'), notes,
         field('Add a note', noteInput),
-        h('div', { class: 'row' }, scopeInput, h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+        h('div', { class: 'row' }, scopeInput, kindInput, h('button', { class: 'btn primary', type: 'button', onclick: async () => {
           if (!selected || !noteInput.value.trim()) return;
-          try { await DK.memoryAdd(selected, scopeInput.value, noteInput.value.trim()); noteInput.value = ''; refresh(); }
+          try { await DK.memoryAdd(selected, scopeInput.value, noteInput.value.trim(), kindInput.value); noteInput.value = ''; refresh(); }
           catch (e) { this.flash(e.message || 'Could not save memory.'); }
         } }, 'Save note')),
         h('h3', {}, 'Project handoffs'), updates,

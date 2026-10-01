@@ -29,8 +29,9 @@
   boot(1, 'Ready');
   const nav = new DesklyNav(data.grid);
   const player = new DesklyPlayer(camera, renderer.domElement, nav);
+  const audio = new DesklyOfficeAudio();
   renderer.domElement.tabIndex = 0;
-  Object.assign(app, { nav, player, data });
+  Object.assign(app, { nav, player, data, audio });
   const bus = new DesklyRuntime.EventBus();
   const audit = { entries: [] };
   bus.on('*', ev => { if (!['task.progress', 'task.output'].includes(ev.type)) { audit.entries.push(ev); if (audit.entries.length > 400) audit.entries.shift(); } });
@@ -59,6 +60,7 @@
     renderer.setPixelRatio(q); resize();
     camera.fov = st.fov; camera.updateProjectionMatrix();
     player.sens = st.sensitivity; player.invertY = st.invertY;
+    audio.setVolume(st.soundVolume);
     app.refreshClock();
     document.body.classList.toggle('no-tags', !st.nameTags);
     if (app.office && screens.cfg && app.teamSig !== teamSig(screens.cfg)) rebuildTeam();
@@ -120,6 +122,12 @@
   /* ---------- UI ---------- */
   const ui = new DesklyUI(app); app.ui = ui;
   const life = new DesklyOfficeLife.OfficeLife(app); app.life = life;
+  const surfaceAt = (x, z) => (x < 8 && z > 23) || (x > 15 && x < 25 && z > 1 && z < 27) ? 'wood' : z < 0 ? 'tile' : 'carpet';
+  player.onStep = ({ x, z, run }) => audio.play('step', { surface: surfaceAt(x, z), run, gain: run ? 0.78 : 0.67 });
+  world.onDoor = door => {
+    if (!app.playing || Math.hypot(player.pos.x - door.c.x, player.pos.z - door.c.z) > 7) return;
+    audio.play('door', { slide: door.slide, gain: 0.42 });
+  };
   world.setLighting?.(life.state.lighting);
   world.setCeoLamp?.(life.state.ceoLamp);
   const updateBadge = () => {
@@ -198,9 +206,10 @@
   app.sit = (seat = exec) => {
     if (!seat || player.seated || (seat !== exec && !app.canSitAt(seat))) return;
     const returnPos = player.pos.clone();
-    player.onStand = () => { player.pos.copy(returnPos); player.seat = null; player.onStand = null; };
+    player.onStand = () => { audio.play('chair', { gain: 0.52 }); player.pos.copy(returnPos); player.seat = null; player.onStand = null; };
     player.seat = seat; player.seated = true;
     player.pos.set(seat.p[0], 0, seat.p[2]); player.yaw = Math.atan2(-seat.f[0], -seat.f[1]); player.pitch = -0.12; player.eyeY = (seat.seat || 0.52) + 0.7;
+    audio.play('chair', { gain: 0.6 });
     ui.toast(seat === exec ? 'At your desk. L laptop · C call people · Tab board · W to stand up.' : 'Take a seat. M to run a meeting · W A S D to stand up.', '#f2c230');
   };
   app.interact = () => { if (ui.panelKind || !focus) return; if (focus.kind === 'emp') ui.openEmployee(focus.e); else focus.o.fn(); };
@@ -292,7 +301,7 @@
     requestAnimationFrame(frame);
   }
   app.applySettings = app.applySettings;
-  (function initSettings() { const st = screens.settings(); player.sens = st.sensitivity; player.invertY = st.invertY; })();
+  (function initSettings() { const st = screens.settings(); player.sens = st.sensitivity; player.invertY = st.invertY; audio.setVolume(st.soundVolume); })();
   screens.start();
   requestAnimationFrame(frame);
 })();

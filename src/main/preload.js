@@ -8,8 +8,8 @@ const call = async (ch, ...args) => {
 };
 const api = {};
 for (const ch of ['app:info', 'config:get', 'config:save', 'config:reset', 'secret:set', 'provider:test', 'workspace:choose', 'workspace:list',
-  'workspace:read', 'workspace:write', 'workspace:open', 'terminal:run', 'tasks:snapshot', 'tasks:create', 'tasks:cancel', 'tasks:clear',
-  'tasks:reviewed', 'approval:respond', 'memory:list', 'memory:add', 'memory:delete', 'team:updates', 'usage:get', 'audit:list', 'audit:export', 'employee:reply', 'meeting:ideas', 'assistant:chat', 'shell:external',
+  'workspace:read', 'workspace:write', 'workspace:open', 'terminal:run', 'tasks:snapshot', 'tasks:create', 'tasks:resume', 'tasks:cancel', 'tasks:clear',
+  'tasks:reviewed', 'approval:respond', 'memory:list', 'memory:add', 'memory:update', 'memory:delete', 'team:updates', 'usage:get', 'audit:list', 'audit:export', 'employee:reply', 'meeting:ideas', 'assistant:chat', 'shell:external',
   'app:fullscreen', 'app:quit']) {
   const name = ch.replace(/[:](\w)/, (_, c) => c.toUpperCase());       // "config:get" -> "configGet"
   api[name] = (...a) => call(ch, ...a);

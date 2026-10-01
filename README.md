@@ -17,7 +17,7 @@
 
 </div>
 
-Deskly is an open-source, first-person **desktop app** built with Electron. You can hire a team, customize each employee's role and instructions, assign real project tasks, and work from your own laptop in the office. Employees only call an AI provider when they have work to do. Without a key, the office runs in demo mode with simulated tasks.
+Deskly is an open-source, first-person **desktop app** built with Electron. You can hire a team, customize each employee's role and instructions, assign real project tasks, and work from your own laptop in the office. Employees use AI for assigned work, conversations, and meetings; ordinary office movement makes no AI calls. Choose an installed Codex or Claude Code login, a hosted API provider, a local model, or demo mode with simulated tasks.
 
 > [!NOTE]
 > Deskly is a working prototype. The screens below come from the actual Windows app using a sample company and demo mode. AI output quality, cost savings, and cross-platform packages have not been validated for a production release.
@@ -68,16 +68,18 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 | Area | What you can do |
 | --- | --- |
-| 3D office | Walk in first person through the original office model with photographed PBR surfaces. A clear, signed aisle leads to an expanded CEO office with a briefing table, whiteboard, display, coffee station, printer, report archive, and switchable lamp. Sit in available chairs, use room whiteboards, printers, presentation screens, drinks, meetings, the operations board, and your laptop. Idle employees animate without making AI calls. |
+| 3D office | Walk in first person through the original office model with photographed PBR surfaces. A clear, signed aisle leads to an expanded CEO office with a briefing table, whiteboard, display, coffee station, printer, report archive, and switchable lamp. Sit in available chairs, use room whiteboards, printers, presentation screens, drinks, meetings, the operations board, and your laptop. Footsteps, drinks, doors, chairs, and office objects have local sound effects with a volume control. Idle employees animate without making AI calls. |
 | Office day | Use the real date and time for your device or select one of ten world regions in Settings. The sky changes through sunrise, daylight, sunset, and moonlit night; indoor lights respond. A fast preview lets you watch the cycle. Employees begin leaving at 18:00. Call the whole team back and keep them through the night and across restarts until you send them home. |
 | Your team | Hire from role presets, edit work instructions and appearance, and inspect a skills and knowledge resume for each employee. |
-| AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, or an OpenAI-compatible endpoint per employee. The laptop assistant can use a separate setup. |
-| Project work | Assign tasks against a selected project folder. An employee plans, reads and writes files, reports progress, and returns a result for review. |
-| Coordination | Keep project notes, approved cross-project notes, file claims, and teammate handoffs. Relevant memory is retrieved for active tasks. |
+| AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, an OpenAI-compatible endpoint, or an installed Codex or Claude Code login per employee. The laptop assistant can use a separate setup. |
+| Project work | Assign tasks against one selected project folder. Deskly records a project map and gives each role a home for new files, such as frontend/ or backend/. Existing layouts are adopted without moving files. Interrupted work can resume from its saved checkpoint. |
+| Coordination | Keep typed project notes with verification status, approved cross-project notes, file claims, and teammate handoffs with contracts and dependencies. Relevant memory is retrieved for active tasks. |
 | Cost controls | Use an optional lightweight model for planning and conversation, see provider usage, and set a monthly token ceiling. The target of 60–70% savings is **not yet measured**. |
 | Oversight | Review shell commands and external action requests before approval. See current tasks and an audit log on the operations board. |
 
 Each role ships with a detailed default playbook, and you can replace it for any employee in **Team & AI keys → Work instructions**. [Read the agent architecture](AGENT_ARCHITECTURE.md) for memory, coordination, and cost details.
+
+The latest updates add installed CLI sign-ins, resumable tasks, memory verification, structured project areas, and office sound effects. The Windows build and 38 automated checks pass. Real task quality, CLI efficiency, and other operating systems still need broader validation.
 
 ## Get started
 
@@ -90,7 +92,9 @@ npm ci
 npm start
 ```
 
-On first launch, the setup wizard asks for your name, company, project folder, team, and laptop assistant. Start in **demo mode** to explore without an API key. To make employees do real AI work, add a supported provider and key in **Team & AI keys**. Ollama uses a local endpoint. API keys are stored through Electron's encrypted OS storage when available.
+On first launch, the setup wizard asks for your name, company, project folder, team, and laptop assistant. Start in **demo mode** to explore without an API key. To make employees do real AI work, choose a provider in **Team & AI keys**. Codex CLI and Claude Code can use their installed sign-ins after you install and sign into the respective CLI; use **Check installed login** to verify. Other hosted providers use an API key, and Ollama uses a local endpoint. API keys are stored through Electron's encrypted OS storage when available.
+
+When you assign the first task in a project, Deskly creates `deskly.project.json` in that project's root. A new empty project also gets `frontend/`, `backend/`, `shared/`, `docs/`, and `operations/`. For an existing project, the map uses recognized folders such as `apps/web` and `apps/api` and leaves existing files in place. You can edit the paths in `deskly.project.json` for your layout; the next task reads the updated map. Each task card shows its assigned area. New files must go in that area or an agreed shared/configuration path; employees can still edit existing files when integration requires it.
 
 ```bash
 npm test          # automated runtime and UI tests
@@ -131,7 +135,7 @@ Commands or external actions wait for your approval
 You review the result, touched files, and audit trail
 ```
 
-Only employees with an active task use AI calls. Plans and short conversations can use a cheaper model, while execution uses the employee's main model. Usage metering and a monthly ceiling help control cost; actual spend still depends on the provider and tasks.
+Idle office animations make no AI calls. Assigned work, employee conversations, meetings, and the laptop assistant can use AI. Plans and short conversations can use a cheaper model, while execution uses the employee's main model. Usage metering and a monthly ceiling help control cost; actual spend still depends on the provider and tasks. Installed CLI connectors currently start a fresh process for each model turn, so long tasks can have substantial prompt overhead.
 
 ## Safety and current limits
 

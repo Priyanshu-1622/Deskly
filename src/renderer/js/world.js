@@ -169,6 +169,8 @@
         let near = false;
         for (const p of agentsPositions) { if (Math.abs(p.x - door.c.x) < 1.7 && Math.abs(p.z - door.c.z) < 1.7) { near = true; break; } }
         const target = near ? 1 : 0;
+        if (door.wasNear !== undefined && door.wasNear !== near) this.onDoor?.(door, near);
+        door.wasNear = near;
         door.open += (target - door.open) * Math.min(1, dt * (near ? 5 : 2.5));
         for (const pn of door.panels) {
           if (door.slide) pn.g.position.copy(pn.base).addScaledVector(pn.dir, door.open);

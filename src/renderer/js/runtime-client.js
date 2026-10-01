@@ -25,6 +25,7 @@
     latestFor(id) { return this.list().find(t => t.employeeId === id); }
     pendingApprovals() { return this.approvals; }
     create({ employee, description }) { return DK.tasksCreate(employee.id, description).catch(e => { this.onError(e.message); return null; }); }
+    resume(id) { return DK.tasksResume(id).catch(e => { this.onError(e.message); return null; }); }
     respondApproval(id, d) { return DK.approvalRespond(id, d); }
     cancel(id) { return DK.tasksCancel(id); }
     markReviewed(id) { return DK.tasksReviewed(id); }

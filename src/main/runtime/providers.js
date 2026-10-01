@@ -1,5 +1,6 @@
 // Provider adapters. Every AI employee (and your own assistant) can use a
 // different provider, model and API key. All calls happen in the main process.
+const { chatCli, testCli } = require('./cli-providers');
 const PROVIDERS = {
   anthropic: { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-5-5', needsKey: true },
   openai: { label: 'OpenAI', defaultModel: 'gpt-4o-mini', needsKey: true, baseUrl: 'https://api.openai.com/v1' },
@@ -7,6 +8,8 @@ const PROVIDERS = {
   openrouter: { label: 'OpenRouter', defaultModel: 'anthropic/claude-sonnet-4.5', needsKey: true, baseUrl: 'https://openrouter.ai/api/v1' },
   ollama: { label: 'Ollama (local)', defaultModel: 'llama3.1', needsKey: false, baseUrl: 'http://localhost:11434/v1' },
   custom: { label: 'OpenAI-compatible (custom URL)', defaultModel: '', needsKey: false },
+  codex_cli: { label: 'Codex CLI (installed login)', defaultModel: '', needsKey: false, localCli: true },
+  claude_code: { label: 'Claude Code (installed login)', defaultModel: '', needsKey: false, localCli: true },
   demo: { label: 'Demo (no AI, simulated)', defaultModel: 'demo', needsKey: false }
 };
 
@@ -44,6 +47,7 @@ async function chat(profile, { system, messages, maxTokens = 2048 }, signal, onU
   const p = PROVIDERS[profile.provider] || PROVIDERS.demo;
   const model = profile.model || p.defaultModel;
   if (profile.provider === 'demo') return demoReply(system, messages);
+  if (p.localCli) return chatCli(profile, { system, messages, maxTokens }, signal, onUsage);
   if (p.needsKey && !profile.apiKey) throw new ProviderError('No API key set for this employee. Add one in Settings → Team.', 'no_key');
   if (profile.provider === 'anthropic') {
     const body = await httpJSON('https://api.anthropic.com/v1/messages', {
@@ -97,6 +101,7 @@ function demoReply(system, messages) {
 }
 
 async function testProfile(profile) {
+  if (PROVIDERS[profile.provider]?.localCli) return testCli(profile);
   const t0 = Date.now();
   const text = await chat(profile, { system: 'Reply with the single word: ready', messages: [{ role: 'user', content: 'Say ready.' }], maxTokens: 256 });
   if (!text.trim()) throw new ProviderError('The provider returned no text. Try another model or test again.', 'empty_response');

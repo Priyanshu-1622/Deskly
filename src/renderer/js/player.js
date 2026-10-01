@@ -7,7 +7,7 @@
       Object.assign(this, { camera, dom, nav });
       this.pos = new T.Vector3(20, 0, -6.4); this.sens = 1; this.invertY = false; this.yaw = 0; this.pitch = -0.02; this.eyeY = 1.66;
       this.keys = {}; this.enabled = false; this.bob = 0; this.coffee = 0; this.heldDrink = null; this.sipT = 0;
-      this.move = { x: 0, z: 0 }; this.lookDrag = null; this.locked = false; this.sprint = false;
+      this.move = { x: 0, z: 0 }; this.lookDrag = null; this.locked = false; this.sprint = false; this.stepTravel = 0;
       this.touch = matchMedia('(pointer: coarse)').matches;
       this.bind();
       // first-person held cup
@@ -109,10 +109,18 @@
         const f = this.forward(), r = new T.Vector3(-f.z, 0, f.x);
         const nx = mx / Math.max(1, len), nz = mz / Math.max(1, len);
         const vx = (f.x * nz + r.x * nx) * speed * dt, vz = (f.z * nz + r.z * nx) * speed * dt;
+        const oldX = this.pos.x, oldZ = this.pos.z;
         this.nav.move(this.pos, vx, vz);
+        const travelled = Math.hypot(this.pos.x - oldX, this.pos.z - oldZ);
+        this.stepTravel += travelled;
+        const stride = run ? 0.72 : 0.88;
+        if (travelled > 0.001 && this.stepTravel >= stride) {
+          this.stepTravel %= stride;
+          this.onStep?.({ x: this.pos.x, z: this.pos.z, run });
+        }
         if (this.eyeY < 1.5) this.eyeY = 1.66;
         this.bob += dt * (run ? 11 : 8) * Math.min(1, len);
-      }
+      } else this.stepTravel = Math.min(this.stepTravel, 0.3);
       const bobY = len > 0.01 ? Math.sin(this.bob) * 0.022 : 0;
       this.camera.position.set(this.pos.x, this.eyeY + bobY, this.pos.z);
       this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');

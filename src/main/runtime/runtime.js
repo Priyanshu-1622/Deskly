@@ -5,6 +5,7 @@ const path = require('path');
 const { chat, parseJSON } = require('./providers');
 const { Workspace } = require('./workspace');
 const { TeamContext } = require('./team-context');
+const projectStructure = require('./project-structure');
 const { forRole } = require('../../renderer/js/role-prompts');
 const { forEmployee: resumeFor } = require('../../renderer/js/resumes');
 
@@ -37,7 +38,7 @@ class Runtime {
     return `You are ${emp.name}, ${emp.role} at ${cfg.company || 'the company'}. Your working style: ${emp.persona || 'Professional and concise.'}\nYour responsibilities: ${emp.scope || emp.role}.\nYour practical résumé (use only these as starting capabilities, and verify project facts):\nSkills: ${resume.skills.join(', ') || 'not specified'}\nKnowledge: ${resume.knowledge.join(', ') || 'not specified'}\nTools and methods: ${resume.tools.join(', ') || 'not specified'}\nRole playbook:\n${String(emp.instructions || forRole(emp.role)).slice(0, 5000)}\nCoordinate through precise project updates. Distinguish confirmed facts from assumptions. You may make small, relevant improvements, but explain them and respect the founder's stated goal.`;
   }
   contextFor(emp, cfg, task) {
-    const notes = this.team.memoriesFor(emp.id, cfg.workspace, 8, task?.description || '').map(m => `- [${m.scope}] ${m.text.slice(0, 400)}`).join('\n');
+    const notes = this.team.memoriesFor(emp.id, cfg.workspace, 8, task?.description || '').map(m => `- [${m.scope}; ${m.kind || 'fact'}; ${m.status || 'unverified'}; source: ${m.source}] ${m.text.slice(0, 400)}${m.evidence ? ` (evidence: ${m.evidence})` : ''}`).join('\n');
     const others = [...this.tasks.values()].filter(t => t.id !== task?.id && t.projectId === this.team.projectId(cfg.workspace) && ACTIVE.has(t.status))
       .map(t => `- ${t.employeeName}: ${t.title} (${t.status}); owns ${(t.claimedFiles || t.files || []).slice(0, 8).join(', ') || 'no files claimed yet'}`).slice(0, 8).join('\n');
     const updates = this.team.updatesFor(emp.id, cfg.workspace, 0, 8);
@@ -75,7 +76,7 @@ class Runtime {
     }
     this.emitFn?.({ ...evt, task: payload.taskId ? this.public(this.tasks.get(payload.taskId)) : undefined, approvals: this.pendingApprovals() });
   }
-  public(t) { if (!t) return null; const { _plan, ...rest } = t; return rest; }
+  public(t) { if (!t) return null; const { _plan, checkpoint, ...rest } = t; return { ...rest, canResume: !!checkpoint && ['interrupted', 'failed'].includes(t.status) }; }
   snapshot() { return { tasks: [...this.tasks.values()].map(t => this.public(t)), approvals: this.pendingApprovals() }; }
   pendingApprovals() { return [...this.approvals.values()].filter(a => a.status === 'pending').map(({ _resolve, ...a }) => a); }
   audit(limit = 300) {
@@ -90,15 +91,27 @@ class Runtime {
     if (!description || description.length > 5000) throw new Error('Task description must be 1–5000 characters.');
     if ([...this.tasks.values()].some(t => t.employeeId === employeeId && ACTIVE.has(t.status))) throw new Error(`${emp.name} is already working on a task.`);
     const projectId = this.team.projectId(this.getConfig()?.workspace);
+    const projectMap = projectStructure.inspect(this.workspace());
+    const workArea = projectStructure.areaFor(emp.role, description);
     const task = {
       id: uid('task'), employeeId, employeeName: emp.name, role: emp.role,
       title: description.length > 60 ? description.slice(0, 58) + '…' : description, description,
       status: 'created', progress: 0, steps: [], step: -1, logs: [], files: [], result: null, error: null,
-      provider: emp.provider || 'demo', model: emp.model || '', projectId, claimedFiles: [], usage: { calls: 0, input: 0, output: 0, cached: 0 }, createdAt: now(), updatedAt: now(), approvalRequests: []
+      provider: emp.provider || 'demo', model: emp.model || '', projectId, projectMap, workArea, claimedFiles: [], checkpoint: null,
+      usage: { calls: 0, input: 0, output: 0, cached: 0 }, createdAt: now(), updatedAt: now(), approvalRequests: []
     };
     this.tasks.set(task.id, task);
     this.emit('task.created', { taskId: task.id, employeeId, title: task.title });
     this.run(task, emp);
+    return this.public(task);
+  }
+  resume(taskId) {
+    const task = this.tasks.get(taskId), emp = task && this.employee(task.employeeId);
+    if (!task || !emp || !task.checkpoint || !['interrupted', 'failed'].includes(task.status)) throw new Error('This task has no resumable checkpoint.');
+    if (task.projectId !== this.team.projectId(this.getConfig()?.workspace)) throw new Error('Select the original project folder before resuming this task.');
+    if ([...this.tasks.values()].some(t => t.id !== task.id && t.employeeId === task.employeeId && ACTIVE.has(t.status))) throw new Error(`${emp.name} is already working on another task.`);
+    this.log(task, '↻ Resuming from the saved checkpoint');
+    this.run(task, emp, true);
     return this.public(task);
   }
   set(task, status, extra = {}) {
@@ -135,7 +148,7 @@ class Runtime {
     if (!t || !ACTIVE.has(t.status)) return;
     for (const a of this.approvals.values()) if (a.taskId === taskId && a.status === 'pending') { a.status = 'cancelled'; a._resolve(false); }
     this.ctl.get(taskId)?.abort();
-    this.set(t, 'cancelled', { error: 'Stopped by you' });
+    this.set(t, 'cancelled', { error: 'Stopped by you', checkpoint: null });
   }
 
   /* ---------- the agent loop ---------- */
@@ -153,18 +166,31 @@ You report to ${cfg.founder || 'the founder'}. You work inside one project folde
 Rules: do the real work, not a description of it. Keep files focused. Never touch secrets or .env files. Check current teammate ownership before editing; send a precise update when your work changes an interface or unblocks someone. Prefer writing deliverables into the project (for documents use deskly-output/). Save only durable, verified memories. Be efficient: finish within about 8 tool calls.`;
   }
 
-  async run(task, emp) {
+  async run(task, emp, resuming = false) {
     const ctl = new AbortController(); this.ctl.set(task.id, ctl);
     const signal = ctl.signal;
     const cfg = this.getConfig() || {};
     const ws = this.workspace();
     const profile = this.profileFor(emp.id);
-    const system = this.systemPrompt(emp, cfg);
+    task.projectMap ||= projectStructure.inspect(ws);
+    task.workArea ||= projectStructure.areaFor(emp.role, task.description);
+    const system = `${this.systemPrompt(emp, cfg)}\n${projectStructure.guidance(task.projectMap, task.workArea)}`;
     const teamContext = this.contextFor(emp, cfg, task);
     try {
+      let tree = '', messages, startTurn = 0;
+      if (resuming && task.checkpoint?.stage === 'running') {
+        tree = task.checkpoint.tree || '';
+        messages = task.checkpoint.messages || [];
+        startTurn = task.checkpoint.nextTurn || 0;
+        if (task.checkpoint.inFlight) {
+          messages.push({ role: 'user', content: `The app closed while ${task.checkpoint.inFlight.name} was running. Its outcome is unknown. Inspect current project state before further edits. Never assume a command or external action succeeded, and request a fresh approval before retrying one.` });
+          task.checkpoint.inFlight = null;
+        }
+        this.set(task, 'running', { error: null });
+      } else {
+      task.checkpoint = { stage: 'planning' };
       this.set(task, 'queued');
       this.set(task, 'planning');
-      let tree = '';
       try { tree = ws.listDir('.', 2).slice(0, 80).map(f => (f.dir ? f.path + '/' : f.path)).join('\n'); } catch (e) { this.log(task, `! ${e.message}`); }
       this.log(task, `$ deskly plan · ${profile.provider}${profile.model ? ' · ' + profile.model : ''}`);
       const planText = await this.call(emp.id, { system, messages: [{ role: 'user', content: `PLAN_REQUEST
@@ -187,7 +213,7 @@ Reply with only JSON: {"title": "max 7 words", "steps": [{"label": "max 8 words"
       task.steps.forEach((s, i) => this.log(task, `  ${i + 1}. ${s.label}${s.sensitive ? '  [needs approval]' : ''}`));
       this.set(task, 'running');
 
-      const messages = [{ role: 'user', content: `AGENT_TURN
+      messages = [{ role: 'user', content: `AGENT_TURN
 Task: """${task.description}"""
 Your plan: ${task.steps.map((s, i) => `${i + 1}. ${s.label}`).join(' ')}
 Project files:
@@ -198,8 +224,11 @@ Reply with exactly ONE JSON object and nothing else:
 {"log": "what you're doing, max 12 words", "step": <plan step number>, "tool": {"name": "...", "args": {...}}}
 or, when finished:
 {"done": true, "summary": "max 20 words", "result": "Markdown report for the founder: what you did, files changed, how to use it, open questions"}` }];
+      task.checkpoint = { stage: 'running', tree, messages, nextTurn: 0, inFlight: null };
+      this.save();
+      }
       const maxTurns = 14;
-      for (let turn = 0; turn < maxTurns; turn++) {
+      for (let turn = startTurn; turn < maxTurns; turn++) {
         if (signal.aborted) return;
         const fresh = this.team.updatesFor(emp.id, cfg.workspace, task.lastUpdateId || 0);
         if (fresh.length) {
@@ -224,6 +253,7 @@ or, when finished:
             task.files.push(w.path); this.log(task, `✓ Report saved → ${w.path}`);
           } catch (e) { this.log(task, `! Could not save report: ${e.message}`); }
           task.result = { summary, body, files: task.files.slice() };
+          task.checkpoint = null;
           if (profile.provider !== 'demo') {
             try {
               this.team.addMemory({ employeeId: emp.id, projectRoot: cfg.workspace, text: `Completed ${task.title}: ${summary.slice(0, 300)}. Files: ${task.files.slice(0, 8).join(', ') || 'none'}.`, source: 'task' });
@@ -235,13 +265,17 @@ or, when finished:
           this.emit('task.completed', { taskId: task.id, employeeId: task.employeeId, summary });
           return;
         }
+        task.checkpoint = { stage: 'running', tree, messages, nextTurn: turn, inFlight: { name: msg.tool?.name || 'unknown' } };
+        this.save();
         const out = await this.tool(task, ws, msg.tool || {}, signal);
         if (task.status === 'cancelled') return;
         messages.push({ role: 'user', content: `TOOL_RESULT ${msg.tool?.name}:\n${String(out).slice(0, 12000)}\n\nAGENT_TURN — continue, or finish with {"done": true, ...}.` });
+        task.checkpoint = { stage: 'running', tree, messages, nextTurn: turn + 1, inFlight: null };
+        this.save();
       }
       throw new Error('Ran out of steps before finishing. Try a smaller task.');
     } catch (e) {
-      if (e?.code === 'cancelled' || signal.aborted) { if (task.status !== 'cancelled') this.set(task, 'cancelled', { error: 'Stopped' }); return; }
+      if (e?.code === 'cancelled' || signal.aborted) { if (task.status !== 'cancelled') this.set(task, 'cancelled', { error: 'Stopped', checkpoint: null }); return; }
       this.log(task, `✕ ${e.message}`);
       this.set(task, 'failed', { error: e.message, errorCode: e.code || 'error' });
     } finally { this.ctl.delete(task.id); }
@@ -285,6 +319,10 @@ or, when finished:
         }
         case 'write_file': {
           const cfg = this.getConfig() || {};
+          const relative = ws.rel(ws.resolve(args.path));
+          if (!fs.existsSync(ws.resolve(args.path)) && task.projectMap && !(task.provider === 'demo' && relative.startsWith('deskly-output/')) && !projectStructure.allowNewFile(task.projectMap, task.workArea, relative)) {
+            return `New files for this task belong in ${task.projectMap.areas[task.workArea]}/ (or an agreed shared/root configuration path). Move this file there, or ask the founder to assign the work to the correct role. No file was written.`;
+          }
           if (cfg.security?.approveWrites) {
             const ok = await this.approve(task, { kind: 'write_file', summary: `Write ${args.path} (${String(args.content || '').length} chars)`, risk: 'low' });
             if (!ok) return 'The founder rejected this file write.';
@@ -367,14 +405,21 @@ Reply in character in 1-3 short sentences. If they're asking for a piece of work
   /* ---------- persistence ---------- */
   save() {
     try {
-      const keep = [...this.tasks.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 80).map(t => ({ ...this.public(t), logs: t.logs.slice(-60) }));
-      fs.writeFileSync(this.tasksPath, JSON.stringify(keep));
-    } catch { }
+      const keep = [...this.tasks.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 80).map(t => ({ ...this.public(t), checkpoint: t.checkpoint, logs: t.logs.slice(-60) }));
+      const temp = this.tasksPath + '.tmp';
+      fs.mkdirSync(path.dirname(this.tasksPath), { recursive: true });
+      fs.writeFileSync(temp, JSON.stringify(keep));
+      if (fs.existsSync(this.tasksPath)) fs.copyFileSync(this.tasksPath, this.tasksPath + '.bak');
+      fs.renameSync(temp, this.tasksPath);
+    } catch (e) { this.lastSaveError = e.message; }
   }
   load() {
     try {
-      for (const t of JSON.parse(fs.readFileSync(this.tasksPath, 'utf8'))) {
-        if (ACTIVE.has(t.status)) { t.status = 'failed'; t.error = 'Interrupted when Deskly closed'; }
+      let saved;
+      try { saved = JSON.parse(fs.readFileSync(this.tasksPath, 'utf8')); }
+      catch { saved = JSON.parse(fs.readFileSync(this.tasksPath + '.bak', 'utf8')); }
+      for (const t of saved) {
+        if (ACTIVE.has(t.status)) { t.status = t.checkpoint ? 'interrupted' : 'failed'; t.error = t.checkpoint ? 'Deskly closed during this task. Review its last action, then resume.' : 'Interrupted when Deskly closed'; }
         this.tasks.set(t.id, t);
       }
     } catch { }

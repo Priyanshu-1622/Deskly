@@ -79,19 +79,21 @@ function wireIPC() {
   h('terminal:run', cmd => ws().runCommand(String(cmd), { timeoutMs: 180000 }));   // user typed it on their own laptop
   h('tasks:snapshot', () => runtime.snapshot());
   h('tasks:create', (employeeId, description) => runtime.create({ employeeId, description }));
+  h('tasks:resume', id => runtime.resume(String(id)));
   h('tasks:cancel', id => runtime.cancel(id));
   h('tasks:clear', () => runtime.clearHistory());
   h('tasks:reviewed', id => runtime.markReviewed(id));
   h('approval:respond', (id, decision) => runtime.respondApproval(id, decision));
   h('memory:list', employeeId => {
     if (employeeId !== 'assistant' && !runtime.employee(employeeId)) throw new Error('Unknown employee');
-    return runtime.team.memoriesFor(employeeId, store.getConfig()?.workspace, 50);
+    return runtime.team.listMemories(employeeId, store.getConfig()?.workspace);
   });
-  h('memory:add', (employeeId, scope, note) => {
+  h('memory:add', (employeeId, scope, note, kind) => {
     if (employeeId !== 'assistant' && !runtime.employee(employeeId)) throw new Error('Unknown employee');
-    return runtime.team.addMemory({ employeeId, projectRoot: store.getConfig()?.workspace, scope, text: note, source: 'founder' });
+    return runtime.team.addMemory({ employeeId, projectRoot: store.getConfig()?.workspace, scope, text: note, kind, source: 'founder' });
   });
   h('memory:delete', id => runtime.team.deleteMemory(String(id)));
+  h('memory:update', (employeeId, id, patch) => runtime.team.updateMemory(String(id), employeeId, patch));
   h('team:updates', () => runtime.team.recentUpdates(store.getConfig()?.workspace));
   h('usage:get', () => runtime.team.usage());
   h('audit:list', n => runtime.audit(n || 300));

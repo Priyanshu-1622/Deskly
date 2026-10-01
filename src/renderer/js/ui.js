@@ -36,8 +36,8 @@
   }
   const fname = n => String(n).split(' ').find(w => !/^Dr\.?$/.test(w)) || n;
   const initials = n => n.replace(/^Dr\.\s*/, '').split(/\s+/).map(w => w[0]).slice(0, 2).join('');
-  const STATUS_LABEL = { created: 'Queued', queued: 'Queued', planning: 'Planning', running: 'Working', waiting_for_approval: 'Needs approval', reviewing: 'Self-review', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped' };
-  const STATUS_COL = { created: '#9b7be0', queued: '#9b7be0', planning: '#9b7be0', running: '#3b8ff0', waiting_for_approval: '#f0a020', reviewing: '#3b8ff0', completed: '#2fbf71', failed: '#e0504a', cancelled: '#9aa3ad' };
+  const STATUS_LABEL = { created: 'Queued', queued: 'Queued', planning: 'Planning', running: 'Working', waiting_for_approval: 'Needs approval', reviewing: 'Self-review', interrupted: 'Interrupted', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped' };
+  const STATUS_COL = { created: '#9b7be0', queued: '#9b7be0', planning: '#9b7be0', running: '#3b8ff0', waiting_for_approval: '#f0a020', reviewing: '#3b8ff0', interrupted: '#f0a020', completed: '#2fbf71', failed: '#e0504a', cancelled: '#9aa3ad' };
 
   class UI {
     constructor(app) {
@@ -307,6 +307,7 @@
       const card = h('div', { class: 'card' + (t.status === 'waiting_for_approval' ? ' amber' : t.status === 'completed' ? ' green' : ['failed'].includes(t.status) ? ' red' : '') },
         h('div', { style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' }, h('div', { class: 't' }, t.title), h('span', { class: 'chip' }, h('i', { style: `background:${col}` }), STATUS_LABEL[t.status])),
         h('div', { class: 'bar' }, h('b', { style: `width:${Math.round(t.progress * 100)}%;background:${col}` })));
+      if (t.projectMap && t.workArea) card.append(h('p', { class: 'note' }, `Project area: ${t.projectMap.areas[t.workArea]}/ · ${t.workArea}`));
       if (t.steps && t.steps.length) card.append(h('ol', { class: 'steps' }, ...t.steps.map((s, i) => h('li', { class: i < t.step || t.status === 'completed' ? 'done' : i === t.step ? 'now' : '' }, h('span', {}, i < t.step || t.status === 'completed' ? '✓' : i === t.step ? '▸' : '·'), s.label + (s.sensitive ? ' · needs approval' : '')))));
       if (t.status === 'waiting_for_approval') {
         const a = rt.pendingApprovals().find(x => x.taskId === t.id);
@@ -323,7 +324,9 @@
         card.append(log); setTimeout(() => { log.scrollTop = 1e6; });
         card.append(h('div', { class: 'row' }, h('button', { class: 'btn danger', type: 'button', onclick: () => rt.cancel(t.id) }, 'Stop task')));
       }
-      if (t.status === 'failed' || t.status === 'cancelled') card.append(h('div', { class: 'note' }, t.error || ''), h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => { const ta = $('#taskInput'); if (ta) { ta.value = t.description; ta.focus(); } } }, 'Edit and retry')));
+      if (['interrupted', 'failed', 'cancelled'].includes(t.status)) card.append(h('div', { class: 'note' }, t.error || ''), h('div', { class: 'row' },
+        t.canResume ? h('button', { class: 'btn primary', type: 'button', onclick: () => rt.resume(t.id) }, 'Resume saved work') : null,
+        h('button', { class: 'btn', type: 'button', onclick: () => { const ta = $('#taskInput'); if (ta) { ta.value = t.description; ta.focus(); } } }, 'Edit and retry')));
       out.push(card);
       if (t.status === 'completed' && t.result) out.push(this.resultCard(t, e));
       return out;
@@ -357,6 +360,7 @@
         if (key === lastKey) return; lastKey = key; renderTabs();
         if (cur === 'tasks') {
           const ts = rt.list();
+          const handoffs = h('div', { class: 'list' }, h('p', { class: 'note' }, 'Loading project handoffs…'));
           body.replaceChildren(ts.length ? h('div', { class: 'list' }, ...ts.map(t => {
             const e = app.office.byId(t.employeeId);
             return h('button', { class: 'item', type: 'button', onclick: () => e && this.openEmployee(e) },
@@ -364,7 +368,17 @@
               h('div', { class: 'meta' }, h('b', {}, t.title), h('small', {}, `${t.employeeName} · ${new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)),
               h('span', { class: 'chip' }, h('i', { style: `background:${STATUS_COL[t.status]}` }), STATUS_LABEL[t.status] + (DesklyRuntime.ACTIVE.has(t.status) ? ` ${Math.round(t.progress * 100)}%` : '')));
           })) : h('p', { class: 'note' }, 'No tasks yet. Walk up to anyone and press E to give them work.'),
-            ts.some(t => !DesklyRuntime.ACTIVE.has(t.status)) ? h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => { rt.clearHistory(); lastKey = ''; render(); } }, 'Clear finished tasks')) : '');
+            ts.some(t => !DesklyRuntime.ACTIVE.has(t.status)) ? h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => { rt.clearHistory(); lastKey = ''; render(); } }, 'Clear finished tasks')) : '',
+            h('div', { class: 'sect' }, h('h3', {}, 'Project handoffs and dependencies'), handoffs));
+          DK.teamUpdates().then(rows => {
+            if (!handoffs.isConnected) return;
+            handoffs.replaceChildren(...(rows.length ? rows.slice(-12).reverse().map(u => h('div', { class: 'card' },
+              h('div', { class: 't' }, `${app.office.byId(u.from)?.name || u.from} → ${u.to === 'all' ? 'team' : app.office.byId(u.to)?.name || u.to}`),
+              h('p', {}, u.text),
+              u.contract ? h('p', { class: 'note' }, `Interface: ${u.contract}`) : null,
+              u.needs ? h('p', { class: 'note' }, `Needs: ${u.needs}`) : null,
+              u.files?.length ? h('p', { class: 'note' }, `Files: ${u.files.join(', ')}`) : null)) : [h('p', { class: 'note' }, 'No handoffs yet. Agents share exact files, interfaces, and blockers here as they work.') ]));
+          }).catch(e => { if (handoffs.isConnected) handoffs.replaceChildren(h('p', { class: 'note' }, e.message)); });
         } else if (cur === 'approvals') {
           const ap = rt.pendingApprovals();
           body.replaceChildren(ap.length ? h('div', { class: 'list' }, ...ap.map(a => {

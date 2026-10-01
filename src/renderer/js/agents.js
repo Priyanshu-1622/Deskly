@@ -110,6 +110,12 @@
             else {
               const step = Math.min(d, sp * dt);
               this.pos.x += dx / d * step; this.pos.z += dz / d * step;
+              this.stepTravel = (this.stepTravel || 0) + step;
+              if (this.stepTravel >= (a.run ? 0.72 : 0.88)) {
+                this.stepTravel = 0;
+                const player = this.ctx.player.pos, distance = Math.hypot(player.x - this.pos.x, player.z - this.pos.z);
+                if (this.ctx.playing && distance < 7) this.ctx.audio?.play('step', { actor: this.id, surface: this.pos.x < 8 && this.pos.z > 23 ? 'wood' : 'carpet', gain: Math.max(0.08, 0.28 * (1 - distance / 7)), pan: Math.max(-0.7, Math.min(0.7, (this.pos.x - player.x) / 5)) });
+              }
               const ty = Math.atan2(dx, dz);
               this.yaw += angDiff(ty, this.yaw) * Math.min(1, dt * 8);
               mode = a.run ? 'run' : 'walk'; rig.speed = sp;
