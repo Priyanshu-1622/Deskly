@@ -146,6 +146,8 @@ Idle office animations make no AI calls. Assigned work, employee conversations, 
 - The 3D people are procedural characters. The office and app are playable, but visuals and interaction still need refinement.
 - Deskly is a prototype. Review the implementation and keep backups before allowing it to edit an important project.
 
+The next visual pass targets realistic characters, furniture, materials and lighting. [See the researched realism direction](docs/REALISM_DIRECTION.md) for reference assets, the current rendering gaps and the implementation order.
+
 ## Project map
 
 | Path | Purpose |
