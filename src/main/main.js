@@ -26,7 +26,7 @@ function profileFor(id) {
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1100, minHeight: 680,
-    backgroundColor: '#171a15', show: true, title: 'Deskly',
+    backgroundColor: '#171a15', show: !process.argv.includes('--deskly-visual-check'), title: 'Deskly',
     icon: path.join(RENDERER, 'assets', 'deskly-icon.png'),
     autoHideMenuBar: process.platform !== 'darwin',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }

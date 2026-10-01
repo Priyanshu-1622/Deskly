@@ -236,15 +236,20 @@
                 h('button', { class: 'btn danger', type: 'button', onclick: () => { draft.employees = draft.employees.filter(x => x !== e); sel = draft.employees[0]?.id; renderList(); renderEdit(); } }, 'Remove from team'))),
             h('div', { class: 'tlook' },
               preview.el,
+              ...(DesklyHumanAssets.models().length ? [field('Character model', h('select', { onchange: ev => { L2.assetId = ev.target.value || undefined; upd(); } },
+                h('option', { value: '', selected: !L2.assetId }, 'Match body selection'),
+                ...DesklyHumanAssets.models().map(m => h('option', { value: m.id, selected: L2.assetId === m.id }, m.label))), 'Detailed characters use textured skin, eyes, clothing and hair.')] : []),
               h('div', { class: 'grid2' },
                 field('Body', h('select', { onchange: ev => { L2.body = ev.target.value; upd(); } }, h('option', { value: 'masculine', selected: L2.body !== 'feminine' }, 'Broad'), h('option', { value: 'feminine', selected: L2.body === 'feminine' }, 'Narrow'))),
                 field('Height', h('input', { type: 'range', min: 1.5, max: 1.95, step: 0.01, value: L2.height || 1.72, oninput: ev => { L2.height = +ev.target.value; upd(); } }))),
+              field('Build width', h('input', {type:'range',min:.85,max:1.15,step:.01,value:L2.buildWidth||1,oninput:ev=>{L2.buildWidth=+ev.target.value;upd();}})),
+              field('Face shape A', h('input', {type:'range',min:0,max:1,step:.02,value:L2.faceA||0,oninput:ev=>{L2.faceA=+ev.target.value;upd();}})),
+              field('Face shape B', h('input', {type:'range',min:0,max:1,step:.02,value:L2.faceB||0,oninput:ev=>{L2.faceB=+ev.target.value;upd();}})),
               field('Skin', swatches('skin', L.skins)),
-              field('Hair', h('select', { onchange: ev => { L2.hairStyle = ev.target.value; upd(); } }, ...L.hairStyles.map(x => h('option', { value: x, selected: x === L2.hairStyle }, x)))),
+              field('Hair', h('select', { onchange: ev => { L2.detailedHair=+ev.target.value; upd(); } }, ...['Short','Bob','Ponytail'].map((x,i) => h('option', { value:i, selected:i===(L2.detailedHair??0) }, x)))),
               field('Hair colour', swatches('hair', L.hairColors)),
-              field('Top', swatches('shirt', L.outfits)),
-              field('Trousers', swatches('pants', L.pants)),
-              h('div', { class: 'checks' }, toggle('glasses', 'Glasses', '#1a1a1a'), toggle('beard', 'Beard', true), toggle('headset', 'Headset', true), toggle('jacket', 'Blazer', '#2e3440'), toggle('shortSleeves', 'Short sleeves', true)))));
+              field('Outfit tint', swatches('shirt', L.outfits)),
+              h('p',{class:'note'},'Outfit shape follows the chosen model. More clothing and hair assets can be added.'))));
         preview.set(e.look);
       };
       renderList(); renderEdit();
@@ -262,8 +267,9 @@
       const floor = new T.Mesh(new T.CircleGeometry(0.6, 32), new T.MeshBasicMaterial({ color: 0x2a3338 })); floor.rotation.x = -Math.PI / 2; sc.add(floor);
       let rig = null, t = 0, alive = true;
       const set = look => {
-        if (rig) { sc.remove(rig.root); rig.root.traverse(o => o.geometry?.dispose?.()); }
-        rig = Human.build(P().lookToRig(look || {})); rig.setMode('stand'); sc.add(rig.root);
+        if (rig) { sc.remove(rig.root); if(rig.dispose)rig.dispose();else rig.root.traverse(o => o.geometry?.dispose?.()); }
+        const rigLook = P().lookToRig(look || {});
+        rig = DesklyHumanAssets.build(rigLook) || Human.build(rigLook); rig.setMode('stand'); sc.add(rig.root);
       };
       const loop = () => {
         if (!alive) return;

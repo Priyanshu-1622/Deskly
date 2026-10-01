@@ -4,17 +4,18 @@
 (function () {
   const ROOT = 'assets/materials/';
   const SETS = ['oak_veneer_02', 'walnut_veneer', 'wood_floor', 'white_stucco',
-    'rough_concrete', 'poly_wool_herringbone', 'rough_linen'];
+    'rough_concrete', 'poly_wool_herringbone', 'rough_linen', 'brown_leather'];
 
   const GROUPS = {
     oak: ['oak', 'door_wood'], walnut: ['walnut'], woodFloor: ['wood_floor'],
     concrete: ['concrete', 'slab', 'paving'], polished: ['floor_polished', 'tile', 'quartz'],
     carpet: ['carpet', 'carpet_accent', 'carpet_design', 'carpet_mkt', 'carpet_hr',
       'carpet_fin', 'carpet_res', 'carpet_sales', 'carpet_support', 'rug'],
-    fabric: ['fabric_dark', 'fabric_blue', 'sofa_grey', 'sofa_green', 'leather'],
-    painted: ['wall', 'wall_ext', 'accent', 'accent_warm', 'white_metal', 'cabinet',
-      'pot', 'pot_dark', 'terracotta', 'cardboard', 'cork'],
-    metal: ['steel', 'chrome', 'frame', 'bronze'],
+    fabric: ['fabric_dark', 'fabric_blue', 'sofa_grey', 'sofa_green'],
+    leather: ['leather'],
+    painted: ['wall', 'wall_ext', 'accent', 'accent_warm'],
+    coated: ['white_metal', 'cabinet', 'frame', 'pot', 'pot_dark', 'terracotta'],
+    metal: ['steel', 'chrome', 'bronze'],
     plastic: ['black', 'keyboard', 'mat_purple', 'mat_teal', 'epoxy']
   };
   const LOOKS = {
@@ -25,9 +26,11 @@
     polished: { set: 'white_stucco', metres: 1.9, normal: 0.018, roughness: 0.48, tint: '#f4f3f0' },
     carpet: { set: 'poly_wool_herringbone', metres: 0.78, normal: 0.27, roughness: 1, preserveColor: true },
     fabric: { set: 'rough_linen', metres: 0.48, normal: 0.32, roughness: 0.98, preserveColor: true },
+    leather: { set: 'brown_leather', metres: 0.32, normal: 0.12, roughness: 0.7, tint: '#a79786' },
     painted: { set: 'white_stucco', metres: 1.8, normal: 0.095, roughness: 0.84, preserveColor: true },
-    metal: { set: 'rough_concrete', metres: 0.72, normal: 0.018, roughness: 0.53, maps: 'micro', metalness: 0.84 },
-    plastic: { set: 'white_stucco', metres: 0.72, normal: 0.055, roughness: 0.72, maps: 'micro' }
+    coated: { roughness: 0.42, metalness: 0 },
+    metal: { roughness: 0.28, metalness: 1 },
+    plastic: { roughness: 0.5, metalness: 0 }
   };
   const groupFor = name => Object.keys(GROUPS).find(group => GROUPS[group].includes(name));
 
@@ -84,19 +87,19 @@
       let material = materials.get(original.name);
       if (!material) {
         material = original.clone();
-        if (look.maps !== 'micro') material.map = maps.color;
-        material.normalMap = maps.normal;
-        material.normalScale = new THREE.Vector2(look.normal, look.normal);
-        material.roughnessMap = maps.rough;
-        material.roughness = look.roughness;
+        material.map = maps?.color || null;
+        material.normalMap = maps?.normal || null;
+        material.normalScale = new THREE.Vector2(look.normal || 0, look.normal || 0);
+        material.roughnessMap = maps?.rough || null;
+        material.roughness = original.name === 'chrome' ? 0.13 : look.roughness;
         material.envMapIntensity = group === 'metal' ? 0.55 : 0.32;
         if (look.metalness != null) material.metalness = look.metalness;
         if (look.tint) material.color.set(look.tint);
-        else if (look.preserveColor && look.maps !== 'micro') material.color.multiplyScalar(group === 'carpet' ? 1.65 : 1.4);
+        else if (look.preserveColor) material.color.multiplyScalar(group === 'carpet' ? 1.2 : 1.05);
         material.needsUpdate = true;
         materials.set(original.name, material);
       }
-      mesh.geometry = projectUV(mesh.geometry, look.metres, THREE);
+      if (look.set) mesh.geometry = projectUV(mesh.geometry, look.metres, THREE);
       mesh.material = material;
       count++;
     });

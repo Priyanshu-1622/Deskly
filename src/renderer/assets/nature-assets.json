@@ -1,0 +1,134 @@
+{
+  "license": "CC0-1.0",
+  "licenseUrl": "https://polyhaven.com/license",
+  "assets": [
+    {
+      "id": "tree_small_02",
+      "source": "https://polyhaven.com/a/tree_small_02"
+    },
+    {
+      "id": "fir_sapling",
+      "source": "https://polyhaven.com/a/fir_sapling"
+    }
+  ],
+  "files": [
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_branch_nor_gl_1k.jpg",
+      "bytes": 581596,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_branch_nor_gl_1k.jpg",
+      "md5": "00a3eed0d4d28e7e890d9ec6ac0619af"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_branch_diff_1k.jpg",
+      "bytes": 449977,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_branch_diff_1k.jpg",
+      "md5": "88b531469f5dba2fc44ca85df3776e7c"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_branch_arm_1k.jpg",
+      "bytes": 375732,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_branch_arm_1k.jpg",
+      "md5": "9ec3d8428295d87ae363bf0d1e0a8288"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_leaves_nor_gl_1k.jpg",
+      "bytes": 681604,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_leaves_nor_gl_1k.jpg",
+      "md5": "b06c87e73f54d9654f66d67e9de7aa85"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_leaves_diff_1k.jpg",
+      "bytes": 340003,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_leaves_diff_1k.jpg",
+      "md5": "315cbc2cebfb399e649ccd39112c109a"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_leaves_arm_1k.jpg",
+      "bytes": 633698,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_leaves_arm_1k.jpg",
+      "md5": "3dad5bafc732f7692db32a262530bbab"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_nor_gl_1k.jpg",
+      "bytes": 1228646,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_nor_gl_1k.jpg",
+      "md5": "115a20da8621cd3e034e9b1bbe574746"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_diff_1k.jpg",
+      "bytes": 863246,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_diff_1k.jpg",
+      "md5": "a7287a3f4e7f0d4577cb949b245f5b14"
+    },
+    {
+      "path": "models/tree_small_02/textures/tree_small_02_arm_1k.jpg",
+      "bytes": 708242,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/tree_small_02/tree_small_02_arm_1k.jpg",
+      "md5": "44b6ed4bf32d7cd67cb3e9d5faeacc38"
+    },
+    {
+      "path": "models/tree_small_02/tree_small_02-game.gltf",
+      "bytes": 5030,
+      "md5": "acb4457ed235a2782946978925039e47",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_small_02/tree_small_02_1k.gltf",
+      "derived": true
+    },
+    {
+      "path": "models/tree_small_02/tree_small_02-game.bin",
+      "bytes": 6834204,
+      "md5": "abbe6ac9e510e6c441a643e956b68a2a",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_small_02/tree_small_02_1k.gltf",
+      "derived": true
+    },
+    {
+      "path": "models/fir_sapling/textures/fir_sapling_twigs_nor_gl_1k.jpg",
+      "bytes": 474717,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling/fir_sapling_twigs_nor_gl_1k.jpg",
+      "md5": "764771b717c54b86fa7d3eadc4a1ada5"
+    },
+    {
+      "path": "models/fir_sapling/textures/fir_sapling_branches_diff_1k.jpg",
+      "bytes": 776633,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling/fir_sapling_branches_diff_1k.jpg",
+      "md5": "84f1d40b80a015d65c0ded042a10765b"
+    },
+    {
+      "path": "models/fir_sapling/textures/fir_sapling_twigs_diff_1k.jpg",
+      "bytes": 252678,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling/fir_sapling_twigs_diff_1k.jpg",
+      "md5": "cd218269e0b34bd1bdb48a8daf21be67"
+    },
+    {
+      "path": "models/fir_sapling/textures/fir_sapling_branches_nor_gl_1k.jpg",
+      "bytes": 1137599,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling/fir_sapling_branches_nor_gl_1k.jpg",
+      "md5": "db70c4595cf207cc04a02b49c195b78d"
+    },
+    {
+      "path": "models/fir_sapling/textures/fir_sapling_twigs_arm_1k.jpg",
+      "bytes": 300249,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling/fir_sapling_twigs_arm_1k.jpg",
+      "md5": "cf97b5de863ebad9a48cb187ef3c3e74"
+    },
+    {
+      "path": "models/fir_sapling/textures/fir_sapling_branches_arm_1k.jpg",
+      "bytes": 793567,
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling/fir_sapling_branches_arm_1k.jpg",
+      "md5": "29a9ff22b8f7f224069b1254db171c05"
+    },
+    {
+      "path": "models/fir_sapling/fir_sapling-game.gltf",
+      "bytes": 6170,
+      "md5": "160180d6e7ff1e27c8827f1b1fa9ea03",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fir_sapling/fir_sapling_1k.gltf",
+      "derived": true
+    },
+    {
+      "path": "models/fir_sapling/fir_sapling-game.bin",
+      "bytes": 2281092,
+      "md5": "3b07264467a1724f443a60e1105a8bed",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fir_sapling/fir_sapling_1k.gltf",
+      "derived": true
+    }
+  ]
+}

@@ -15,3 +15,5 @@ deskly-secrets.json
 team-context.json*
 tasks.json
 audit.jsonl
+__pycache__/
+*.pyc

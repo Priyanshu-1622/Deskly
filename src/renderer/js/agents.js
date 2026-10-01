@@ -57,7 +57,7 @@
     constructor(def, ctx) {
       Object.assign(this, def);
       this.ctx = ctx;                                   // {world, nav, office, runtime, player}
-      this.rig = Human.build(def.look);
+      this.rig = DesklyHumanAssets.build(def.look) || Human.build(def.look);
       this.pos = new T.Vector3(); this.yaw = 0; this.vel = 0;
       this.q = []; this.cur = null; this.posture = 'stand'; this.state = 'AVAILABLE';
       this.activity = 'Arriving'; this.bubble = null; this.nextIdle = rnd(20, 45); this.greeted = false;

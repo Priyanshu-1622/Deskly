@@ -107,7 +107,8 @@
       look: {
         height: fem ? 1.64 + Math.random() * 0.08 : 1.72 + Math.random() * 0.1, skin: pick(LOOKS.skins), hair: pick(LOOKS.hairColors),
         hairStyle: fem ? pick(['bob', 'long', 'bun', 'ponytail', 'curly']) : pick(['short', 'side', 'buzz', 'curly']),
-        shirt: pick(LOOKS.outfits), pants: pick(LOOKS.pants), shoes: pick(LOOKS.shoes), body: fem ? 'feminine' : 'masculine'
+        shirt: pick(LOOKS.outfits), pants: pick(LOOKS.pants), shoes: pick(LOOKS.shoes), body: fem ? 'feminine' : 'masculine',
+        detailedHair: fem ? pick([1,2]) : 0,faceA:Math.random()*.5,faceB:Math.random()*.5
       },
       ...overrides
     };
@@ -121,7 +122,10 @@
     return DEFAULT_TEAM.map(t => ({
       id: t.id, name: t.name, role: t.role, dept: t.dept, scope: t.scope, persona: t.persona, resume: DesklyResumes.forRole(t.role), instructions: DesklyRolePrompts.forRole(t.role), tasks: t.tasks.slice(),
       deliverable: t.deliverable, provider: 'demo', model: '', baseUrl: '',
-      look: { ...t.look, body: t.look.bust ? 'feminine' : 'masculine' }
+      look: { ...t.look, body: t.look.bust ? 'feminine' : 'masculine',
+        faceA:[0,.2,.45,.65,0][[...t.id].reduce((n,c)=>n+c.charCodeAt(0),0)%5],
+        faceB:[0,.4,0,0,.7][[...t.id].reduce((n,c)=>n+c.charCodeAt(0),0)%5],
+        detailedHair:['bob','long','braids'].includes(t.look.hairStyle)?1:['pony','ponytail','bun'].includes(t.look.hairStyle)?2:0 }
     }));
   }
   window.DesklyPresets = { DEPARTMENTS, ROLES, LOOKS, makeEmployee, defaultTeam, lookToRig };

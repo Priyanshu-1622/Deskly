@@ -32,24 +32,25 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/sky-sunset.png" alt="Golden sunset over the Deskly office beneath a clouded sky" width="100%"></td>
-    <td width="50%"><img src="docs/screenshots/ceo-office.png" alt="Expanded CEO office with a briefing table, lounge, and work areas" width="100%"></td>
+    <td width="50%"><img src="docs/visual-checks/workstation-day.png" alt="Current CEO workstation with detailed wood furniture, leather seating, and a glass skylight" width="100%"></td>
   </tr>
   <tr><td><b>Watch the office change with the day.</b> The regional clock drives sunlight, clouds, sunset, and night.</td><td><b>Make the CEO office your own.</b> Walk in along a clear aisle and use the room's interactive work areas.</td></tr>
 </table>
 
 <details>
-  <summary>See the office floor</summary>
-  <br><img src="docs/screenshots/office.png" alt="First-person view inside the Deskly office" width="100%">
+  <summary>See the detailed employees</summary>
+  <br><img src="docs/visual-checks/detailed-roster.png" alt="Fifteen customizable employees using the new textured character models" width="100%">
+  <br><img src="docs/visual-checks/character-face.png" alt="Close view of an employee's textured face, eyes, and hair" width="100%">
 </details>
 
 <details>
-  <summary>See the new route and CEO office</summary>
-  <br><img src="docs/screenshots/ceo-route.png" alt="Clear wood aisle leading to the CEO office" width="100%">
+  <summary>See the exterior trees and skylights</summary>
+  <br><img src="docs/visual-checks/outdoor-trees.png" alt="Authored exterior trees beside the office windows" width="100%">
 </details>
 
 <details>
   <summary>See sunset and the office after dark</summary>
-  <br><img src="docs/screenshots/sky-night.png" alt="Empty office with indoor lights beneath a night sky" width="100%">
+  <br><img src="docs/visual-checks/workstation-night.png" alt="Current CEO workstation illuminated at night beneath the skylight" width="100%">
 </details>
 
 <details>
@@ -79,7 +80,7 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 Each role ships with a detailed default playbook, and you can replace it for any employee in **Team & AI keys → Work instructions**. [Read the agent architecture](AGENT_ARCHITECTURE.md) for memory, coordination, and cost details.
 
-The latest updates add installed CLI sign-ins, resumable tasks, memory verification, structured project areas, and office sound effects. The Windows build and 38 automated checks pass. Real task quality, CLI efficiency, and other operating systems still need broader validation.
+The latest updates add detailed employee models with face and hair customization, corrected walking posture, authored exterior trees, glass skylights, and refined CEO furniture. Installed CLI sign-ins, resumable tasks, verified memory, structured project areas, and office sounds are also available. The Windows build and 44 automated checks pass; a desktop graphics check loads all 15 detailed employees without renderer errors. Real task quality, CLI efficiency, and other operating systems still need broader validation.
 
 ## Get started
 
@@ -143,10 +144,10 @@ Idle office animations make no AI calls. Assigned work, employee conversations, 
 - API keys are encrypted with Electron `safeStorage`; saving a key fails if secure storage is unavailable.
 - Approved shell commands run with your OS permissions and can reach outside the project folder. Read the full command before approving it.
 - Email, publishing, deployment, and payment requests are approval-gated and recorded. Deskly does not execute those external actions yet.
-- The 3D people are procedural characters. The office and app are playable, but visuals and interaction still need refinement.
+- Default employees use textured, skinned character models with procedural animation. Further clothing options, facial animation, and movement refinement are still in progress.
 - Deskly is a prototype. Review the implementation and keep backups before allowing it to edit an important project.
 
-The next visual pass targets realistic characters, furniture, materials and lighting. [See the researched realism direction](docs/REALISM_DIRECTION.md) for reference assets, the current rendering gaps and the implementation order.
+Deskly now includes detailed, customizable employee models with textured faces, eyes, hair and clothing; authored exterior trees; and a full roof with glass skylights. The CEO workstation has detailed furniture, dedicated leather maps, filtered reflections and sun shadows. Further wardrobe, facial animation and wider furniture refinement are in progress. [See the realism direction](docs/REALISM_DIRECTION.md) and [asset credits / character intake](docs/ASSET_CREDITS.md) for the current scope and source assets.
 
 ## Project map
 

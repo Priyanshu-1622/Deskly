@@ -13,11 +13,17 @@
       const sun = new T.DirectionalLight(0xfff4e2, 0.85); sun.position.set(40, 60, -30);
       const fill = new T.DirectionalLight(0xdfe9ff, 0.25); fill.position.set(-30, 25, 50);
       const moon = new T.DirectionalLight(0xb8d0ff, 0);
+      this.shadowFocus = new T.Vector3(5, 0, 31);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 150 });
+      sun.shadow.bias = -0.00015; sun.shadow.normalBias = 0.025;
+      sun.shadow.camera.updateProjectionMatrix();
       const sky = DesklyOfficeSky.create(T);
       const indoor = [[8, 16], [20, 16], [31, 16], [43, 16], [54, 16], [8, 31], [17, 31], [28, 31], [40, 31], [53, 31], [20, 5]]
         .map(([x, z]) => { const l = new T.PointLight(0xffe6bf, 0, 13, 2); l.position.set(x, 2.9, z); return l; });
       Object.assign(this, { hemi, sun, fill, moon, sky, indoor, lightingMode: 'day' });
-      this.scene.add(hemi, sun, fill, moon, sky.mesh, ...indoor);
+      this.scene.add(hemi, sun, sun.target, fill, moon, sky.mesh, ...indoor);
       this.doors = []; this.lifts = []; this.screens = [];
       this.setTime(DesklyOfficeTime.info(new Date()));
     }
@@ -31,6 +37,7 @@
     setTime(clock) {
       this.clockInfo = clock;
       const position = DesklyOfficeTime.solar(clock);
+      this.sunDirection = position.sun;
       const smooth = (a, b, n) => { const t = Math.max(0, Math.min(1, (n - a) / (b - a))); return t * t * (3 - 2 * t); };
       const day = smooth(-8, 7, position.elevation);
       const twilight = smooth(-12, -1, position.elevation) * (1 - smooth(4, 18, position.elevation));
@@ -45,10 +52,16 @@
       this.sun.intensity = Math.max(0, s.y) * 1.05 * (this.lightingMode === 'focus' ? 0.8 : 1);
       this.moon.position.set(m.x * 70, m.y * 70, m.z * 70);
       this.moon.intensity = Math.max(0, m.y) * (1 - day) * (0.08 + 0.09 * Math.abs(Math.sin(Math.PI * position.phase)));
-      this.hemi.intensity = 0.16 + day * (this.lightingMode === 'focus' ? 0.66 : 0.84);
-      this.fill.intensity = 0.1 + day * 0.17;
+      this.hemi.intensity = 0.08 + day * (this.lightingMode === 'focus' ? 0.35 : 0.48);
+      this.fill.intensity = 0.045 + day * 0.09;
       const interior = (1 - smooth(-3, 15, position.elevation)) * (this.lightingMode === 'focus' ? 0.72 : 0.88);
-      for (const light of this.indoor) light.intensity = interior;
+      for (const light of this.indoor) light.intensity = .5 + interior;
+      const materials = new Set();
+      this.scene.traverse(o => { if (o.isMesh) for (const material of (Array.isArray(o.material) ? o.material : [o.material])) if (material?.isMeshStandardMaterial) materials.add(material); });
+      for (const material of materials) {
+        material.userData.dayEnvironmentIntensity ??= material.envMapIntensity;
+        material.envMapIntensity = material.userData.dayEnvironmentIntensity * (0.16 + day * 0.84);
+      }
       const haze = new T.Color('#14243a').lerp(new T.Color('#bad9e9'), day).lerp(new T.Color('#df8d62'), twilight * 0.44);
       this.scene.fog.color.copy(haze);
       this.renderer.toneMappingExposure = 1.05 + (1 - day) * 0.13;
@@ -56,6 +69,26 @@
 
     setCeoLamp(on) {
       if (this.ceoLamp) this.ceoLamp.intensity = on ? 1.25 : 0;
+    }
+
+    setQuality(quality) {
+      this.renderer.shadowMap.enabled = quality !== 'low';
+      const size = quality === 'high' ? 2048 : 1024;
+      if (this.sun.shadow.mapSize.x !== size) {
+        this.sun.shadow.mapSize.set(size, size);
+        this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
+      }
+      this.sun.shadow.needsUpdate = true;
+    }
+
+    setShadowFocus(position) {
+      // Keep texel-sized focus steps, rather than making static shadows crawl
+      // continuously with small first-person camera movements.
+      const step = 36 / this.sun.shadow.mapSize.x;
+      this.shadowFocus.set(Math.round(position.x / step) * step, 0, Math.round(position.z / step) * step);
+      const solar = this.sunDirection;
+      if (solar) this.sun.position.set(solar.x * 70, solar.y * 70, solar.z * 70).add(this.shadowFocus);
+      this.sun.target.position.copy(this.shadowFocus);
     }
 
     async load(onProgress) {
@@ -71,7 +104,10 @@
         'assets/materials/office-reflections.jpg', resolve, undefined, reject));
       reflections.mapping = T.EquirectangularReflectionMapping;
       reflections.encoding = T.sRGBEncoding;
-      this.scene.environment = reflections;
+      const pmrem = new T.PMREMGenerator(this.renderer);
+      this.environmentTarget = pmrem.fromEquirectangular(reflections);
+      this.scene.environment = this.environmentTarget.texture;
+      reflections.dispose(); pmrem.dispose();
       const glass = new T.MeshPhysicalMaterial({ color: '#c7e0e7', metalness: 0, roughness: 0.08,
         clearcoat: 1, clearcoatRoughness: 0.045, transparent: true, opacity: 0.27,
         depthWrite: false, side: T.DoubleSide, envMapIntensity: 0.55 });
@@ -81,6 +117,8 @@
           o.matrixAutoUpdate = false; o.updateMatrix();
           if (o.material.name === 'glass') o.material = glass;
           const m = o.material;
+          o.receiveShadow = !m.transparent;
+          o.castShadow = !m.transparent && !/^Floor_|^Outdoor_/.test(o.name);
           if (m.transparent) { m.depthWrite = false; o.renderOrder = 2; }
           if (/^screen/.test(m.name)) m.emissiveIntensity = 0.45;
         }
@@ -88,6 +126,8 @@
       this.scene.add(gltf.scene);
       this.data = data;
       this.markers = data.markers;
+      this.realism = await DesklyOfficeRealism.apply(this, gltf.scene);
+      this.envelope = await DesklyOfficeEnvelope.apply(this, gltf.scene);
       const lamp = this.markers.find(m => m.kind === 'lamp' && m.room === 'CEO_Office');
       if (lamp) {
         this.ceoLamp = new T.PointLight(0xffdfac, 0, 4.6, 2);

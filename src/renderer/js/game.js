@@ -7,6 +7,8 @@
   const renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.outputEncoding = T.sRGBEncoding;
   renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
   stage.appendChild(renderer.domElement);
   const camera = new T.PerspectiveCamera(70, 1, 0.05, 240);
   const world = new DesklyWorld(renderer);
@@ -25,6 +27,12 @@
     boot(0.1, 'Reading your settings…'); await screens.load();
     boot(0.3, 'Building the office…');
     data = await world.load(m => boot(0.7, m));
+    await DesklyHumanAssets.load().catch(error => console.warn('Optional character library unavailable:', error.message));
+    for(const employee of screens.cfg?.employees||[]){
+      const look=employee.look||(employee.look={}),seed=[...employee.id].reduce((n,c)=>n+c.charCodeAt(0),0);
+      look.faceA ??= [0,.2,.45,.65,0][seed%5];look.faceB ??= [0,.4,0,0,.7][seed%5];
+      look.detailedHair ??= ['bob','long','braids'].includes(look.hairStyle)?1:['pony','ponytail','bun'].includes(look.hairStyle)?2:0;
+    }
   } catch (e) { bootMsg.textContent = 'Deskly could not start: ' + e.message; console.error(e); return; }
   boot(1, 'Ready');
   const nav = new DesklyNav(data.grid);
@@ -58,6 +66,7 @@
     const st = screens.settings();
     const q = { high: Math.min(devicePixelRatio, 2), balanced: 1, low: 0.75 }[st.quality] || 1;
     renderer.setPixelRatio(q); resize();
+    world.setQuality(st.quality || 'balanced');
     camera.fov = st.fov; camera.updateProjectionMatrix();
     player.sens = st.sensitivity; player.invertY = st.invertY;
     audio.setVolume(st.soundVolume);
@@ -86,7 +95,7 @@
     app.office.syncShift(true);
   }
   function rebuildTeam() {
-    for (const e of app.office.employees) { world.scene.remove(e.rig.root); if (e.screen) world.scene.remove(e.screen.plane); }
+    for (const e of app.office.employees) { world.scene.remove(e.rig.root); e.rig.dispose?.(); if (e.screen) world.scene.remove(e.screen.plane); }
     world.screens = world.screens.filter(s => s === app.ceoScreens?.[0] || s === app.ceoScreens?.[1]);
     buildOffice(false);
     ui.buildMinimapBase?.();
@@ -297,6 +306,7 @@
     if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clockInfo, app.timeMode === 'preview'); drawCeo(); }
     if (app.office && app.playing && mmT <= 0) { mmT = 0.2; ui.minimap(player, app.office.employees); }
     if (panelT <= 0) { panelT = 0.33; ui.tick(); }
+    world.setShadowFocus(camera.position);
     renderer.render(world.scene, camera);
     requestAnimationFrame(frame);
   }

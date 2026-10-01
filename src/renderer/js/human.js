@@ -228,8 +228,13 @@
         this.phase += dt * (m === 'run' ? 9 : 6.3) * clamp(this.speed / 1.3, 0.6, 1.6);
         const p = this.phase, sp = Math.sin(p);
         tgt.thighL[0] = -sp * amp; tgt.thighR[0] = sp * amp;
-        tgt.shinL[0] = Math.max(0, Math.sin(p - 1.3)) * 1.0 + 0.05; tgt.shinR[0] = Math.max(0, Math.sin(p + Math.PI - 1.3)) * 1.0 + 0.05;
-        tgt.footL[0] = -tgt.thighL[0] * 0.3; tgt.footR[0] = -tgt.thighR[0] * 0.3;
+        // Bend the knee during the forward swing; keep the supporting leg
+        // extended. Cancel both joint angles at the ankle to keep shoes level.
+        const kneeLift = m === 'run' ? 1.05 : 0.65;
+        tgt.shinL[0] = Math.max(0, Math.cos(p)) * kneeLift + 0.025;
+        tgt.shinR[0] = Math.max(0, -Math.cos(p)) * kneeLift + 0.025;
+        tgt.footL[0] = -tgt.thighL[0] - tgt.shinL[0];
+        tgt.footR[0] = -tgt.thighR[0] - tgt.shinR[0];
         tgt.upperArmL[0] = sp * amp * 0.75; tgt.upperArmR[0] = -sp * amp * 0.75;
         tgt.foreArmL[0] = -0.35 - Math.max(0, -sp) * 0.3; tgt.foreArmR[0] = -0.35 - Math.max(0, sp) * 0.3;
         tgt.spine[1] = sp * 0.07; tgt.hips[1] = -sp * 0.06; tgt.head[1] = -sp * 0.04;

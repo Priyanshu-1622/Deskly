@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "employee-male",
+      "label": "Detailed broad build",
+      "body": "male",
+      "path": "assets/characters/employee-male.glb",
+      "driver": "deskly",
+      "rightHand": "wrist.R",
+      "skinMaterials": [
+        "Skin",
+        "Skin_Medium",
+        "Skin_Deep"
+      ],
+      "referenceSeatHeight": 0.5,
+      "sha256": "29e783242f7571e57bd0b09c20bf3aa27c095395b70fed6a1e665ee653c92075"
+    },
+    {
+      "id": "employee-female",
+      "label": "Detailed narrow build",
+      "body": "female",
+      "path": "assets/characters/employee-female.glb",
+      "driver": "deskly",
+      "rightHand": "wrist.R",
+      "skinMaterials": [
+        "Skin",
+        "Skin_Medium",
+        "Skin_Deep"
+      ],
+      "referenceSeatHeight": 0.5,
+      "sha256": "591c0bfe673b2d5ef0e0eb6c88c463c85ecf8a8c333b47e5cc1e2361b72a1d6b"
+    }
+  ]
+}

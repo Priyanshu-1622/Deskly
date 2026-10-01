@@ -103,4 +103,14 @@ The first completed workstation and character should be the acceptance sample. S
 - All current seats, workstation screens, doors, coffee actions, meeting positions and navigation routes still work.
 - Performance measurements accompany the visual comparison; no frame-rate claim is made before measurement.
 
-This document records the researched target and the current gap. It does not claim that the realistic asset replacement has already been implemented.
+## First graphics pass
+
+The CEO workstation now has bevelled timber edges, drawer hardware, individual keyboard keys, a shaped mouse, ceramic mug and detailed executive chair base. Its footprint and seat marker are retained. The CEO lounge uses Poly Haven's authored Modern Arm Chair 01, with its own UVs and PBR maps. Leather has dedicated detail maps, while metal and plastic no longer borrow concrete or plaster normals.
+
+The renderer uses filtered environment reflections, camera-local sun shadows and quality-dependent shadow resolution. Ambient light and reflection brightness follow the day/night cycle. Fixed-camera desktop captures are saved under `docs/visual-checks` by `node tools/visual-smoke.cjs`.
+
+A rigged GLB character loader connects to employee behaviour and the team preview. Two detailed MakeHuman-based employee models are now bundled, with textured skin, separate eyes and eyebrows, clothing folds, three hairstyles and face blends. A retargeting adapter preserves existing employee actions. Team customization covers model, height, width, face blends, skin, hair and outfit tint.
+
+The building now has a complete ceiling with framed glass skylights and raised stairwell roofs. Sixteen exterior tree positions use game meshes derived from Poly Haven Tree Small 02 and Fir Sapling, with dedicated bark and foliage maps. Source tree triangle counts were reduced from 2,062,487 to 112,615 and from 433,021 to 24,603 respectively; the fir scene contains three variants and each placement uses one.
+
+The desktop graphics check captures the workstation, character close-ups, seated pose, second body model, exterior trees and a full roster in several animation modes. Screenshots are real renderer captures, stored in `docs/visual-checks`. Regression tests check roof coverage, skylights, asset checksums, tree index validity and budgets, skin weights, morphs and eye transparency. See [asset credits and character intake](ASSET_CREDITS.md). Further wardrobe, facial animation and wider furniture refinement remain in progress.
