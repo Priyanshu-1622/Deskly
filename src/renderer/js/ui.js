@@ -124,6 +124,7 @@
 
     /* ---------------- minimap ---------------- */
     buildMinimapBase() {
+      if(this.mmBase)return;
       const nav = this.app.nav, c = document.createElement('canvas');
       c.width = 480; c.height = 288;
       const g = c.getContext('2d'), sx = 480 / 60, sz = 288 / 36;
@@ -156,7 +157,7 @@
     /* ---------------- keys / touch ---------------- */
     bindKeys() {
       addEventListener('keydown', e => {
-        if (e.target.closest && e.target.closest('input,textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
+        if (e.target.closest && e.target.closest('input,textarea,select')) { if (e.key === 'Escape' && this.panelKind) { this.close(); e.preventDefault(); } else if (e.key === 'Escape') e.target.blur(); return; }
         if (!this.app.playing) return;
         if (e.code === 'Escape' && this.panelKind) { this.close(); e.preventDefault(); }
         else if (e.code === 'Escape') { this.app.pause(); e.preventDefault(); }

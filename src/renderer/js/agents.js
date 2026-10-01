@@ -100,7 +100,8 @@
           case 'goto': {
             if (this.posture === 'sit') { this.standUp(); break; }
             if (!this.path) {
-              this.path = this.ctx.nav.path(this.pos, a) || [{ x: a.x, z: a.z }];
+              this.path = this.ctx.nav.path(this.pos, a);
+              if(!this.path||!this.path.length){this.activity='Waiting for a clear route';if(a.t>12)this.done();break;}
               this.pi = 0;
             }
             const tgt = this.path[this.pi];
@@ -108,6 +109,9 @@
             const sp = a.run ? 2.4 : 1.3;
             if (d < 0.12) { this.pi++; if (this.pi >= this.path.length) { this.done(); break; } }
             else {
+              const nx=this.pos.x+dx/d*.6,nz=this.pos.z+dz/d*.6;
+              const yielding=this.ctx.office.employees.some(other=>other!==this&&other.present&&other.posture!=='sit'&&Math.hypot(other.pos.x-nx,other.pos.z-nz)<.45&&Math.hypot(other.pos.x-this.pos.x,other.pos.z-this.pos.z)<.85&&this.ctx.office.employees.indexOf(other)<this.ctx.office.employees.indexOf(this));
+              if(yielding){mode='stand';break;}
               const step = Math.min(d, sp * dt);
               this.pos.x += dx / d * step; this.pos.z += dz / d * step;
               this.stepTravel = (this.stepTravel || 0) + step;
@@ -171,9 +175,13 @@
       }
       rig.setMode(mode);
       rig.root.position.copy(this.pos); rig.root.rotation.y = this.yaw;
-      rig.update(dt, this.yaw);
+      const shadowNear=pd<20;if(this.shadowNear!==shadowNear){this.shadowNear=shadowNear;rig.root.traverse(m=>{if(m.isMesh)m.castShadow=shadowNear&&!/^Hair_|Eyeballs|Eyebrows/.test(m.name);});}
+      this.animationT=(this.animationT||0)+dt;
+      const f=this.ctx.player.forward(),inView=((this.pos.x-P.x)*f.x+(this.pos.z-P.z)*f.z)>-2;
+      const interval=pd<5?1/30:inView&&pd<18?1/20:inView&&pd<35?1/10:1/4;
+      if(this.animationT>=interval){rig.update(this.animationT,this.yaw);this.animationT=0;}
       const task = this.taskInfo();
-      drawStatus(this.sprite, this.state, task ? task.progress : 0, time);
+      this.statusT=(this.statusT||0)-dt;if(this.statusT<=0){drawStatus(this.sprite,this.state,task?task.progress:0,time);this.statusT=.2;}
       if (this.state === 'WAITING_FOR_APPROVAL') this.sprite.scale.setScalar(0.28 + Math.sin(time * 6) * 0.03);
       else this.sprite.scale.setScalar(0.28);
       if (this.bubble && this.bubble.until < time) this.bubble = null;
@@ -344,9 +352,14 @@
       const W = this.ctx.world;
       for (const a of this.arrivals) {
         if (a.done || time < a.at) continue;
+        if(a.recall && this.employees.some(e=>e.present&&Math.hypot(e.pos.x-20,e.pos.z+7.4)<.85))continue;
         a.done = true;
         const e = a.e;
+        if(e.present)continue;
         if (!this.onShift(e) && !this.shouldStay(e)) continue;
+        if(a.recall&&e.meeting){e.posture='stand';e.sitSeat=null;e.spawnAt(20,-7.4,0);e.say('Coming to the meeting.',2);continue;}
+        e.clear();e.errand=null;e.posture='stand';e.sitSeat=null;e.greeted=false;
+        if(a.recall){e.spawnAt(20,-7.4,0);e.push({type:'goto',x:20,z:2.6});e.goDesk();e.say('Back to the office.',2);continue;}
         if (a.via === 'lift') {
           const L = W.lifts[Math.random() < 0.5 ? 0 : 1];
           const x = (L.x0 + L.x1) / 2;
@@ -387,14 +400,15 @@
         if (e.errand === 'leaving') { e.clear(); e.errand = null; e.goDesk(); }
         return;
       }
-      this.arrivals?.filter(a => a.e === e).forEach(a => { a.done = true; });
-      e.clear(); e.errand = null; e.greeted = false;
-      e.posture = 'stand'; e.sitSeat = null;
-      e.spawnAt(20, -7.4, 0);
-      e.activity = 'Coming back to the office';
-      e.push({ type: 'goto', x: 20, z: 2.6 }); e.goDesk();
-      e.say(manual ? 'I’m coming back to the office.' : 'Back to work.', 3);
+      if(this.arrivals?.some(a=>a.e===e&&!a.done&&a.recall))return;
+      this.arrivals?.filter(a=>a.e===e).forEach(a=>{a.done=true;});
+      this.arrivals ||= [];
+      const now=this.ctx.time||0;
+      const last=this.arrivals.filter(a=>!a.done&&a.recall).reduce((t,a)=>Math.max(t,a.at),now-1.8);
+      this.arrivals.push({e,at:Math.max(now,last+1.8),via:'door',recall:true,manual});
+      e.activity='On the way back to the office';
     }
+
     setOvertime(e, enabled) {
       this.shift.overtime = this.shift.overtime.filter(id => id !== e.id);
       if (enabled) {

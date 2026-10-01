@@ -31,38 +31,23 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/sky-sunset.png" alt="Golden sunset over the Deskly office beneath a clouded sky" width="100%"></td>
-    <td width="50%"><img src="docs/visual-checks/workstation-day.png" alt="Current CEO workstation with detailed wood furniture, leather seating, and a glass skylight" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/sky-sunset.png" alt="Fresh sunset view of the single-floor office, trees and courtyard" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/ceo-office.png" alt="Current CEO office with skylights, wood furniture and a private briefing area" width="100%"></td>
   </tr>
-  <tr><td><b>Watch the office change with the day.</b> The regional clock drives sunlight, clouds, sunset, and night.</td><td><b>Make the CEO office your own.</b> Walk in along a clear aisle and use the room's interactive work areas.</td></tr>
+  <tr><td><b>A changing office day.</b> Regional time drives sun, clouds, sunset and night.</td><td><b>Your private workspace.</b> Use the laptop, whiteboard, coffee station and briefing area.</td></tr>
 </table>
 
 <details>
-  <summary>See the detailed employees</summary>
-  <br><img src="docs/visual-checks/detailed-roster.png" alt="Fifteen customizable employees using the new textured character models" width="100%">
-  <br><img src="docs/visual-checks/character-face.png" alt="Close view of an employee's textured face, eyes, and hair" width="100%">
+  <summary>Explore the current office and updated employees</summary>
+  <br><img src="docs/screenshots/meeting-wide.png" alt="The current detailed employee models gathered in the original boardroom" width="100%">
+  <br><img src="docs/screenshots/employee-portrait.png" alt="Current employee face, hair and corrected neck alignment" width="100%">
+  <br><img src="docs/screenshots/courtyard.png" alt="The original office entrance with retained outdoor grounds and authored trees" width="100%">
 </details>
 
 <details>
-  <summary>See the exterior trees and skylights</summary>
-  <br><img src="docs/visual-checks/outdoor-trees.png" alt="Authored exterior trees beside the office windows" width="100%">
-</details>
-
-<details>
-  <summary>See sunset and the office after dark</summary>
-  <br><img src="docs/visual-checks/workstation-night.png" alt="Current CEO workstation illuminated at night beneath the skylight" width="100%">
-</details>
-
-<details>
-  <summary>See the team and project tools</summary>
-  <br>
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/employee.png" alt="Employee panel with a skills and knowledge resume, task controls, and demo mode notice" width="100%"></td>
-    <td width="50%"><img src="docs/screenshots/laptop.png" alt="In-office laptop with project files, editor, terminal, assistant, and team delegation" width="100%"></td>
-  </tr>
-  <tr><td><b>Meet your team.</b> Each person has skills, knowledge, editable work instructions, an AI setup, and a task history.</td><td><b>Work from your desk.</b> Browse and edit your project, use a terminal, ask your assistant, or delegate to an employee.</td></tr>
-</table>
+  <summary>Find rooms and keep working after dark</summary>
+  <br><img src="docs/visual-checks/office-atlas.png" alt="Current office atlas floor plan with a walking route to the CEO office" width="100%">
+  <br><img src="docs/screenshots/ceo-night.png" alt="Current CEO office under its skylights after dark" width="100%">
 </details>
 
 ## What is working today
@@ -71,6 +56,9 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 | --- | --- |
 | 3D office | Walk in first person through the original office model with photographed PBR surfaces. A clear, signed aisle leads to an expanded CEO office with a briefing table, whiteboard, display, coffee station, printer, report archive, and switchable lamp. Sit in available chairs, use room whiteboards, printers, presentation screens, drinks, meetings, the operations board, and your laptop. Footsteps, drinks, doors, chairs, and office objects have local sound effects with a volume control. Idle employees animate without making AI calls. |
 | Office day | Use the real date and time for your device or select one of ten world regions in Settings. The sky changes through sunrise, daylight, sunset, and moonlit night; indoor lights respond. A fast preview lets you watch the cycle. Employees begin leaving at 18:00. Call the whole team back and keep them through the night and across restarts until you send them home. |
+| Office atlas | Search rooms, people and facilities; pan, zoom, locate yourself, and choose a walkable route that remains on the minimap. |
+| Freeboards | Add local images, notes and links to movable, resizable cards. Boards save on your device and show their contents in the 3D office. Open them from the laptop, map or physical board. |
+| First day | An optional introduction explains movement, projects, approvals, meetings and shifts. Replay it any time with H or F1. |
 | Your team | Hire from role presets, edit work instructions and appearance, and inspect a skills and knowledge resume for each employee. |
 | AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, an OpenAI-compatible endpoint, or an installed Codex or Claude Code login per employee. The laptop assistant can use a separate setup. |
 | Project work | Assign tasks against one selected project folder. Deskly records a project map and gives each role a home for new files, such as frontend/ or backend/. Existing layouts are adopted without moving files. Interrupted work can resume from its saved checkpoint. |
@@ -80,7 +68,7 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 Each role ships with a detailed default playbook, and you can replace it for any employee in **Team & AI keys → Work instructions**. [Read the agent architecture](AGENT_ARCHITECTURE.md) for memory, coordination, and cost details.
 
-The latest updates add detailed employee models with face and hair customization, corrected walking posture, authored exterior trees, glass skylights, and refined CEO furniture. Installed CLI sign-ins, resumable tasks, verified memory, structured project areas, and office sounds are also available. The Windows build and 44 automated checks pass; a desktop graphics check loads all 15 detailed employees without renderer errors. Real task quality, CLI efficiency, and other operating systems still need broader validation.
+The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The restored office passes 49 automated checks and the desktop playtest gathers all 15 employees in the original boardroom without renderer errors.
 
 ## Get started
 
@@ -115,7 +103,12 @@ The repository also declares `dist:mac` and `dist:linux` targets. Run those on t
 | **F** / **R** | Drink what you are holding / discard the cup |
 | **P** | Toggle a clean photo mode |
 | **L** | Open your laptop |
-| **Tab** | Open the operations board |
+| **Tab** / **T** | Open the operations board / tasks |
+| **G** | Open or close the office atlas |
+| **B** | Open office whiteboards |
+| **N** | Open team and night recall controls |
+| **H** / **F1** | Replay the first-day guide |
+| **Backspace** | Clear the walking route |
 | **C** | Call people to your office or a meeting room |
 | **M** | Start a meeting |
 | **W A S D** while seated | Stand up and return to where you sat down |
@@ -164,3 +157,12 @@ The agent loop and its current limitations are described in [AGENT_ARCHITECTURE.
 ## License
 
 [MIT](LICENSE) © Priyanshu Patel
+## Office map and brainstorming
+
+Click the bottom-left map or press **G** for the office atlas: room, teammate and facility filters, sharp floor plan, drag to pan, scroll to zoom, player locator and walking routes that remain on the minimap. **B** opens whiteboards, **N** the team, **T** tasks, **H / F1** the guide, and **Backspace** clears your route.
+
+Interact with an office whiteboard using **E**, or choose **Whiteboards** on the laptop or map. Add movable, resizable notes, images and links. Boards save locally and show their contents on the physical office boards. Export a JSON backup from the editor.
+
+To keep everyone at the office overnight, use **Tab → Team → Call everyone back · keep here**. This hold continues across nights and restarts until you send them home; idle workers do not make AI calls.
+
+See [the public release plan](docs/PUBLIC-RELEASE-PLAN.md) for the remaining onboarding, installer, accessibility and real AI verification work.

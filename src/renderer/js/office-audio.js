@@ -96,6 +96,10 @@
       } else if (name === 'lift') {
         this.tone(ctx, t, 0.18, 660, 0.035, 'sine', 660);
         this.tone(ctx, t + 0.16, 0.23, 880, 0.035, 'sine', 880);
+      } else if (name === 'courtyard') {
+        this.noise(ctx,t,2.4,{cutoff:420,soft:true,level:.055});
+        if(!options.night)for(let i=0;i<3;i++)this.tone(ctx,t+.2+i*.14,.09,1600+v*55+i*190,.012,'sine',2300-i*170);
+        this.noise(ctx,t+.8,1.8,{cutoff:170,soft:true,level:.022});
       } else if (name === 'ui') {
         this.tone(ctx, t, 0.08, 420, 0.018, 'sine', 560);
       } else return false;

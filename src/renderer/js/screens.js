@@ -23,7 +23,7 @@
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('small', {}, hint) : null);
   const mark = (extra = '') => h('img', { class: `deskly-mark ${extra}`.trim(), src: 'assets/deskly-icon.png', alt: '' });
 
-  const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'high', nameTags: true, timeZone: 'auto', timeMode: 'real', soundVolume: 0.65 };
+  const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'balanced', smoothPerformance: true, showFps: true, nameTags: true, timeZone: 'auto', timeMode: 'real', soundVolume: 0.65 };
 
   class Screens {
     constructor(app) {
@@ -309,6 +309,8 @@
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.invertY, onchange: e => { st.invertY = e.target.checked; } }), 'Invert vertical look'),
           field(`Field of view · ${st.fov}°`, h('input', { type: 'range', min: 55, max: 100, step: 1, value: st.fov, oninput: e => { st.fov = +e.target.value; e.target.parentNode.firstChild.textContent = `Field of view · ${st.fov}°`; } })),
           field('Graphics quality', h('select', { onchange: e => { st.quality = e.target.value; } }, ...[['high', 'High (sharp, needs a decent GPU)'], ['balanced', 'Balanced'], ['low', 'Low (laptops, integrated graphics)']].map(([v, l]) => h('option', { value: v, selected: v === st.quality }, l)))),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.smoothPerformance !== false, onchange: e => { st.smoothPerformance = e.target.checked; } }), 'Automatically balance sharpness for smoother movement'),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.showFps !== false, onchange: e => { st.showFps = e.target.checked; } }), 'Show frame rate'),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.nameTags, onchange: e => { st.nameTags = e.target.checked; } }), 'Show name tags and speech bubbles'),
           h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => DK.appFullscreen() }, 'Toggle full screen (F11)')),
           h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['F', 'Drink what you are holding'], ['R', 'Discard an empty cup'], ['P', 'Photo mode'], ['Tab', 'Operations board'], ['C / M', 'Call people / meeting'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
@@ -470,7 +472,7 @@
       renderTeam(); this.lapTimer = setInterval(() => { if (!s.hidden) renderTeam(); }, 1500);
       s.replaceChildren(h('div', { class: 'laptop' },
         h('div', { class: 'lbar' }, mark('small'), h('b', {}, `${this.cfg.founder || 'Your'}'s laptop`), h('span', {}, this.cfg.workspace || ''),
-          h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => { this.closeLaptop(); if (this.app.exec !== false) this.app.sit?.(); setTimeout(() => this.app.ui.openMeeting(null, 'CEO_Office'), 60); } }, 'Call people to my office'), h('button', { class: 'btn', type: 'button', onclick: () => DK.workspaceOpen() }, 'Open folder'), h('button', { class: 'btn primary', type: 'button', onclick: () => this.closeLaptop() }, 'Close laptop · Esc'))),
+          h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => { this.closeLaptop(); if (this.app.exec !== false) this.app.sit?.(); setTimeout(() => this.app.ui.openMeeting(null, 'CEO_Office'), 60); } }, 'Call people to my office'), h('button', { class: 'btn', type: 'button', onclick: () => { this.closeLaptop(); this.app.ui.openBoards(); } }, 'Whiteboards'), h('button', { class: 'btn', type: 'button', onclick: () => DK.workspaceOpen() }, 'Open folder'), h('button', { class: 'btn primary', type: 'button', onclick: () => this.closeLaptop() }, 'Close laptop · Esc'))),
         h('div', { class: 'lgrid' },
           h('div', { class: 'lcol' }, h('div', { class: 'lhead' }, 'Project', h('button', { class: 'mini', type: 'button', title: 'Refresh', onclick: loadTree }, '↻')), tree,
             h('div', { class: 'lhead' }, 'Team'), team),

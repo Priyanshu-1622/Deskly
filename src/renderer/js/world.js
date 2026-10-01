@@ -98,6 +98,11 @@
       ]);
       onProgress?.('Unpacking the office…');
       const gltf = await new Promise((res, rej) => new T.GLTFLoader().parse(b64, '', res, rej));
+      // Remove redundant hanging signs; retain the CEO room door plaque.
+      const signBoxes = [[8.7,2.4,8.5,13.7,3.6,8.9],[6.6,2.4,10.2,11.6,3.6,10.6],[6.6,2.4,21.7,11.6,3.6,22.1]];
+      gltf.scene.traverse(mesh => { if (mesh.isMesh && mesh.name.startsWith('Dept_Engineering_')) {
+        const old = mesh.geometry; mesh.geometry = DesklyOfficeRealism.removeInside(old, signBoxes); old.dispose();
+      } });
       onProgress?.('Finishing office surfaces…');
       this.officeMaterials = await DesklyOfficeMaterials.apply(gltf.scene, T);
       const reflections = await new Promise((resolve, reject) => new T.TextureLoader().load(
@@ -136,6 +141,7 @@
       }
       this.buildDoors(data.doors);
       this.buildLifts(data.lifts);
+      this.campus = new DesklyCampus.Campus(this);
       return data;
     }
 

@@ -1158,7 +1158,7 @@ for xc in (29.7, 32.6):
 place(Z, sofa(1.8, "sofa_grey", 0.6), 30.0, 7.4, 180)
 add(Z, [bx("black", 27.2, 27.25, 1.0, 2.0, 3.2, 4.4), bx("white_metal", 27.25, 27.26, 1.05, 1.95, 3.25, 4.35)])
 place(Z, fiddle_fig(1.9), 32.5, 7.4)
-place(Z, fire_ext(), 32.75, 3.0)
+place(Z, fire_ext(), 32.75, 4.8)
 
 Z = "Washrooms"; CUR["room"] = Z
 for (zlo, zhi, label) in ((4.0, 8.0, "Men"), (0.15, 4.0, "Women")):
@@ -1315,7 +1315,7 @@ round_meeting(Z, 37.4, 29.9, 0.45, 3, "leather", "walnut")
 
 Z = "Server_Room"; CUR["room"] = Z
 for i in range(4):
-    place(Z, server_rack(), 43.3, 29.3 + i * 0.62, 90)
+    place(Z, server_rack(), 42.6, 29.3 + i * 0.62, 90)  # Leave a usable central service aisle.
 for i in range(4):
     place(Z, server_rack(), 44.5, 29.3 + i * 0.62, -90)
 add(Z, [bx("white_metal", 42.3, 44.8, 0, 1.9, 34.9, 35.6), bx("keyboard", 42.4, 44.7, 1.4, 1.8, 34.88, 34.9),
@@ -1359,13 +1359,10 @@ place(Z, table_rect(0.9, 0.5, "oak", 0.42), 3.9, 24.2)
 place(Z, pod("sign_eng"), 13.6, 24.0, 0)
 place(Z, pod("sign_eng"), 15.2, 24.0, 0)
 place(Z, locker_bank(8, "sign_eng"), 2.4, 8.35 - 0.0, 0)
-place(Z, locker_bank(8, "sign_eng"), 5.8, 8.35, 0)
+place(Z, locker_bank(8, "sign_eng"), 0.55, 10.8, 90)  # Keep the kitchen doorway clear.
 place(Z, fiddle_fig(1.9), 0.7, 22.4)
 place(Z, areca_palm(1.8), 1.0, 21.9)
 hang(Z, "ENGINEERING", "sign_eng", 8.3, 16.1)
-hang(Z, "CEO OFFICE", "walnut", 11.2, 8.7)
-hang(Z, "CEO OFFICE", "walnut", 9.1, 10.4)
-hang(Z, "CEO", "walnut", 9.1, 21.9)
 planter_strip(Z, "z", 16.5, 18.0, 21.7)
 planter_strip(Z, "z", 16.5, 22.7, 26.0)
 planter_strip(Z, "z", 16.5, 10.0, 13.0)
@@ -1519,7 +1516,7 @@ Z = "Corridor"; CUR["room"] = Z
 for (x, z, r) in ((0.35, 26.8, -90), (59.65, 26.8, 90), (30, 9.0, 0)):
     place(Z, fire_ext(), x, z, r)
 place(Z, exit_sign(), 20, 0.31, 0, 2.85)
-place(Z, water_cooler(), 45.9, 27.1, 180)
+place(Z, water_cooler(), 53.6, 27.1, 180)
 for x in (12.5, 33.5, 44.6):
     place(Z, snake_plant(1.0), x, 27.4)
 

@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" href="assets/deskly-icon.png">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/office-tools.css">
 </head>
 <body>
 <div id="stage"></div>
@@ -17,7 +18,7 @@
   <div id="provider" class="hud glass"><i></i><span></span></div>
   <div id="counters" class="hud"></div>
   <div id="cross" class="hud" hidden></div>
-  <button id="control-hint" class="hud" type="button" hidden>Click to control <span>W A S D to move · Esc to pause</span></button>
+  <button id="control-hint" class="hud" type="button" hidden>Click to control <span>W A S D move · G map · N team · H help · Esc pause</span></button>
   <div id="prompt" class="hud glass" hidden></div>
   <div id="toasts" class="hud"></div>
   <div id="heldbar" class="hud glass" hidden></div>
@@ -27,6 +28,7 @@
 </div>
 <div id="seatbar" class="hud" hidden><span><kbd>L</kbd> Laptop</span><span><kbd>C / M</kbd> Meeting</span><span><kbd>Tab</kbd> Board</span><span><kbd>W</kbd> Stand up</span></div>
 <aside id="panel" class="glass" hidden></aside>
+<div id="building-status" class="hud" hidden style="position:fixed;right:24px;bottom:20px;padding:9px 14px;border-radius:8px;background:rgba(15,29,34,.8);color:#e8c785;font-size:12px;pointer-events:none"></div>
 
 <div id="screen-start" class="screen" hidden></div>
 <div id="screen-setup" class="screen" hidden></div>
@@ -53,12 +55,16 @@
   <script src="js/office-materials.js"></script>
 <script src="js/office-realism.js"></script>
 <script src="js/office-envelope.js"></script>
+<script src="js/campus.js"></script>
+<script src="js/performance.js"></script>
   <script src="js/world.js"></script>
 <script src="js/agents.js"></script>
 <script src="js/player.js"></script>
 <script src="js/office-life.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/screens.js"></script>
+<script src="js/office-tools.js"></script>
+<script src="js/office-atlas.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

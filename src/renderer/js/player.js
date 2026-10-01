@@ -122,7 +122,7 @@
         this.bob += dt * (run ? 11 : 8) * Math.min(1, len);
       } else this.stepTravel = Math.min(this.stepTravel, 0.3);
       const bobY = len > 0.01 ? Math.sin(this.bob) * 0.022 : 0;
-      this.camera.position.set(this.pos.x, this.eyeY + bobY, this.pos.z);
+      this.camera.position.set(this.pos.x, this.pos.y + this.eyeY + bobY, this.pos.z);
       this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
       if (this.sipT > 0) this.sipT = Math.max(0, this.sipT - dt);
       if (this.heldDrink) {

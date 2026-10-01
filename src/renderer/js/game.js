@@ -10,6 +10,8 @@
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   stage.appendChild(renderer.domElement);
+  const performanceBudget = new DesklyPerformance(renderer);
+  renderer.shadowMap.autoUpdate = false;
   const camera = new T.PerspectiveCamera(70, 1, 0.05, 240);
   const world = new DesklyWorld(renderer);
   world.scene.add(camera);
@@ -40,6 +42,7 @@
   const audio = new DesklyOfficeAudio();
   renderer.domElement.tabIndex = 0;
   Object.assign(app, { nav, player, data, audio });
+  app.campus=world.campus;app.nav=app.campus.attach(app,nav);app.performance=performanceBudget;
   const bus = new DesklyRuntime.EventBus();
   const audit = { entries: [] };
   bus.on('*', ev => { if (!['task.progress', 'task.output'].includes(ev.type)) { audit.entries.push(ev); if (audit.entries.length > 400) audit.entries.shift(); } });
@@ -64,8 +67,7 @@
   /* ---------- settings ---------- */
   app.applySettings = () => {
     const st = screens.settings();
-    const q = { high: Math.min(devicePixelRatio, 2), balanced: 1, low: 0.75 }[st.quality] || 1;
-    renderer.setPixelRatio(q); resize();
+    performanceBudget.configure(st.quality || 'balanced', st.smoothPerformance !== false); resize();
     world.setQuality(st.quality || 'balanced');
     camera.fov = st.fov; camera.updateProjectionMatrix();
     player.sens = st.sensitivity; player.invertY = st.invertY;
@@ -154,6 +156,7 @@
   /* ---------- interactions ---------- */
   const objects = [
     ...life.objects(M),
+    ...app.campus.objects(),
     ...(exec ? [{ key: 'desk', x: exec.p[0] + exec.f[0] * 0.3, z: exec.p[2] + exec.f[1] * 0.3, r: 1.8, desk: true, short: 'Desk', fn: () => player.seated ? app.openLaptop() : app.sit() }] : []),
     ...M.filter(m => m.kind === 'chair' && !m.desk && !m.exec).map(c => ({
       key: `seat${c.p[0]}:${c.p[2]}`, x: c.p[0] - c.f[0] * 0.6, z: c.p[2] - c.f[1] * 0.6,
@@ -221,7 +224,7 @@
     audio.play('chair', { gain: 0.6 });
     ui.toast(seat === exec ? 'At your desk. L laptop · C call people · Tab board · W to stand up.' : 'Take a seat. M to run a meeting · W A S D to stand up.', '#f2c230');
   };
-  app.interact = () => { if (ui.panelKind || !focus) return; if (focus.kind === 'emp') ui.openEmployee(focus.e); else focus.o.fn(); };
+  app.interact = () => { if (ui.panelKind) return; focus=findFocus();if(!focus)return; if (focus.kind === 'emp') ui.openEmployee(focus.e); else focus.o.fn(); };
   app.office = null;
   app.office_onSay = null;
 
@@ -272,12 +275,16 @@
     else if (app.playing && e.code === 'KeyP' && !ui.panelKind) app.togglePhotoMode();
   });
 
+  DesklyOfficeTools.install(app);
+  DesklyAtlas.install(app);
+
   /* ---------- loop ---------- */
   let last = performance.now(), hudT = 0, mmT = 0, panelT = 0, skyT = 0, shiftT = 0, attract = 0;
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const rawDt=(now-last)/1000,dt=Math.min(.05,rawDt);last=now;
+    performanceBudget.update(rawDt,!document.hidden&&app.playing);
     skyT -= dt;
-    if (skyT <= 0) { skyT = 0.5; app.refreshClock(); }
+    if (skyT <= 0) { skyT = app.timeMode === 'preview' ? .5 : 5; app.refreshClock(); }
     if (app.office) {
       app.time += dt;
       app.office.runArrivals(app.time);
@@ -287,6 +294,7 @@
       life.update(dt);
     }
     if (app.playing || app.office) player.update(app.playing ? dt : 0);
+    app.campus.update(dt);
     if (!app.office || (!app.playing && document.body.dataset.screen === 'screen-start')) {
       attract += dt * 0.05;
       camera.position.set(30 + Math.cos(attract) * 34, 17 + Math.sin(attract * 0.7) * 3, 18 + Math.sin(attract) * 24);
@@ -299,14 +307,16 @@
     $('#hud').hidden = !app.playing; $('#seatbar').hidden = !(app.playing && player.seated);
     const heldbar = $('#heldbar'), held = player.heldDrink;
     heldbar.hidden = !app.playing || !held;
-    if (held) heldbar.innerHTML = `<b>${held.type === 'coffee' ? 'COFFEE' : 'WATER'}</b><span>${'●'.repeat(Math.max(0, held.remaining))}${'○'.repeat(Math.max(0, held.max - held.remaining))}</span><kbd>F</kbd> drink <kbd>R</kbd> discard`;
+    if (held && heldbar.dataset.drink !== held.type+held.remaining) {heldbar.dataset.drink=held.type+held.remaining;heldbar.innerHTML = `<b>${held.type === 'coffee' ? 'COFFEE' : 'WATER'}</b><span>${'●'.repeat(Math.max(0, held.remaining))}${'○'.repeat(Math.max(0, held.max - held.remaining))}</span><kbd>F</kbd> drink <kbd>R</kbd> discard`;}
     $('#control-hint').hidden = !app.playing || player.locked || player.touch;
-    if (app.office && app.playing) ui.tagsUpdate(camera); else $('#tags').replaceChildren(), ui.tags?.clear?.();
+    if(app.office&&app.playing){app.tagT=(app.tagT||0)-dt;if(app.tagT<=0){app.tagT=1/30;ui.tagsUpdate(camera);}}else if(ui.tags.size){$('#tags').replaceChildren();ui.tags.clear();}
     hudT -= dt; mmT -= dt; panelT -= dt;
-    if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clockInfo, app.timeMode === 'preview'); drawCeo(); }
+    if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clockInfo, app.timeMode === 'preview'); drawCeo();const status=$('#building-status');status.hidden=!app.playing||screens.settings().showFps===false;status.textContent=performanceBudget.fps+' FPS'; }
     if (app.office && app.playing && mmT <= 0) { mmT = 0.2; ui.minimap(player, app.office.employees); }
     if (panelT <= 0) { panelT = 0.33; ui.tick(); }
+    if(app.office){app.lightT=(app.lightT||0)-dt;if(app.lightT<=0){app.lightT=.5;const lamps=world.indoor.map(l=>({l,d:l.position.distanceToSquared(camera.position)})).sort((a,b)=>a.d-b.d);lamps.forEach(({l,d},i)=>l.visible=i<4&&d<225);}}
     world.setShadowFocus(camera.position);
+    performanceBudget.shadow(dt,!document.hidden);
     renderer.render(world.scene, camera);
     requestAnimationFrame(frame);
   }

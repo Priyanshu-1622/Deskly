@@ -29,7 +29,7 @@
     originals.forEach((o, i) => copies.set(o, clones[i]));
     originals.forEach(o => {
       const m = copies.get(o);
-      if (m.isMesh) { m.geometry = o.geometry.clone(); m.castShadow = m.receiveShadow = true; }
+      if (m.isMesh) { m.geometry = o.geometry.clone(); m.castShadow = !/^Hair_|Eyeballs|Eyebrows/.test(m.name);m.receiveShadow = true;m.frustumCulled=true; }
       if (m.isSkinnedMesh) { m.skeleton = o.skeleton.clone(); m.skeleton.bones = o.skeleton.bones.map(b => copies.get(b)); m.bind(m.skeleton, o.bindMatrix); }
     });
     const root = new T.Group(), s = (Number(look.height) || 1.75) / 1.75;
@@ -81,7 +81,9 @@
     const a=Math.max(0,Math.min(1,Number(look.faceA)||0)),b=Math.max(0,Math.min(1,Number(look.faceB)||0)),div=Math.max(1,a+b);
     model.traverse(mesh=>{if(mesh.morphTargetInfluences){mesh.morphTargetInfluences[0]=a/div;mesh.morphTargetInfluences[1]=b/div;}});
     model.scale.x*=Math.max(.85,Math.min(1.15,Number(look.buildWidth)||1));
-    const names={root:'hips',spine05:'spine',neck01:'neck',head:'head'};
+    const names={root:'hips',spine05:'spine'};
+    const neck=named(model,'neck01'),head=named(model,'head');
+    const restNeck=neck.quaternion.clone(),restHead=head.quaternion.clone();
     for(const side of ['R','L'])Object.assign(names,{['upperarm01.'+side]:'upperArm'+side,['lowerarm01.'+side]:'foreArm'+side,['wrist.'+side]:'hand'+side,['upperleg01.'+side]:'thigh'+side,['lowerleg01.'+side]:'shin'+side,['foot.'+side]:'foot'+side});
     const bindings=[];model.traverse(b=>{
       const name=b.userData.name||b.name;
@@ -115,8 +117,12 @@
         root.getWorldQuaternion(rootQ);
         for(const {bone,joint,align}of bindings){
           joint.getWorldQuaternion(q);q.multiply(align).premultiply(rootQ);
-          bone.parent.getWorldQuaternion(parentQ);bone.quaternion.copy(parentQ.invert().multiply(q));bone.updateMatrixWorld(true);
+          bone.parent.getWorldQuaternion(parentQ);bone.quaternion.copy(parentQ.invert().multiply(q));bone.updateWorldMatrix(false,false);
         }
+        // Keep the authored neck/head relationship and apply only local look motion.
+        neck.quaternion.copy(restNeck).multiply(driver.J.neck.quaternion);
+        head.quaternion.copy(restHead).multiply(driver.J.head.quaternion);
+        neck.updateMatrixWorld(true);
         // Anchor the lower shoe to the floor instead of letting shorter,
         // bent stride poses lift the entire character above it.
         if(mode==='walk'||mode==='run'){

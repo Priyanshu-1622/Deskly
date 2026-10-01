@@ -126,7 +126,8 @@ def write_character(sex):
     neck=heads['neck01'][1]/factor+min_y
     for name,ancestry in [('Face_A','african'),('Face_B','asian')]:
         delta=(target(ancestry+'-'+sex+'-young.target')-target('caucasian-'+sex+'-young.target'))*factor
-        delta[body[:,1]<neck]=0;face_masks[name]=delta
+        blend=np.clip((body[:,1]-neck)/.75,0,1);blend=blend*blend*(3-2*blend)
+        delta*=blend[:,None];face_masks[name]=delta
     # Authored geometry is stored in UV-split indexed form. Source weight indices
     # follow the mesh vertices; splitting UV seams preserves their weights.
     def mesh(name,positions,uv,faces,weights,mat,hidden=set(),body_only=False,morph=False,head_only=False,shape_data=None):

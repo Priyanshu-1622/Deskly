@@ -37,10 +37,10 @@ test('employees leave in stages while active tasks and overtime keep them presen
     window: agentsWindow, THREE: {}, DesklyPresets: { DEPARTMENTS: {} }, setTimeout: () => 1
   });
   const makeEmployee = id => ({ id, present: true, errand: null, meeting: null, interacting: false,
-    activity: 'At desk', posture: 'sit', sitSeat: {}, rig: { root: { visible: true }, cup: { visible: false }, phone: { visible: false } },
+    pos:{x:8,z:16}, activity: 'At desk', posture: 'sit', sitSeat: {}, rig: { root: { visible: true }, cup: { visible: false }, phone: { visible: false } },
     clear() { this.actions = []; }, push(...actions) { this.actions = (this.actions || []).concat(actions); },
     goDesk() { this.push({ type: 'goto', x: 8, z: 16 }); },
-    say() {}, spawnAt(x, z) { this.present = true; this.position = [x, z]; } });
+    say() {}, spawnAt(x, z) { this.present = true; this.position = [x, z];this.pos={x,z}; } });
   const first = makeEmployee('first'), second = makeEmployee('second');
   const active = new Set();
   const saved = { state: {}, save() {} };
@@ -62,6 +62,9 @@ test('employees leave in stages while active tasks and overtime keep them presen
   assert.equal(second.errand, 'leaving');
   second.present = false;
   office.recall(second);
+  assert.equal(second.present,false);
+  assert.equal(office.arrivals.filter(a=>a.recall&&!a.done).length,1);
+  office.ctx.world={};office.runArrivals(0);
   assert.equal(second.present, true);
   assert.equal(second.posture, 'stand');
   assert.deepEqual(second.position, [20, -7.4]);

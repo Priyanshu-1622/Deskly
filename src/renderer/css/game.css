@@ -35,7 +35,7 @@ button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px soli
 #prompt kbd{font-family:var(--mono);font-size:11px;border:1px solid rgba(255,255,255,.35);border-radius:var(--r);padding:1px 6px}
 #prompt small{color:var(--dim)}
 #toasts{top:calc(env(safe-area-inset-top,0px) + 58px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(440px,calc(100vw - 32px))}
-.photo-mode #hud,.photo-mode #seatbar,.photo-mode #panel{display:none!important}
+.photo-mode #hud,.photo-mode #seatbar,.photo-mode #panel,.photo-mode #building-status{display:none!important}
 #heldbar{right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);padding:8px 11px;display:flex;align-items:center;gap:8px;font-size:11px;border-top:3px solid var(--accent)}
 #heldbar b{font-family:var(--display);letter-spacing:.08em;color:var(--accent)}
 #heldbar span{color:var(--accent);letter-spacing:2px}
