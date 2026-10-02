@@ -13,6 +13,14 @@
   --mono:"JetBrains Mono","Cascadia Mono",ui-monospace,Consolas,monospace;
 }
 *{box-sizing:border-box}
+/* Slim brass rails on dark office panels, including editors and lists. */
+*{scrollbar-width:thin;scrollbar-color:#8b753f var(--n1)}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:var(--n1)}
+*::-webkit-scrollbar-thumb{background:#8b753f;border:2px solid var(--n1);border-radius:2px}
+*::-webkit-scrollbar-thumb:hover{background:var(--signal)}
+*::-webkit-scrollbar-corner{background:var(--n1)}
+#panel .body,.sbody,.wbody,.ftree,.achat,.termout,.group-transcript{overscroll-behavior:contain;scrollbar-gutter:stable;scroll-behavior:auto}
 body{margin:0;background:var(--night)}
 .dk{position:relative;overflow:hidden;background:var(--night);color:var(--text);font:400 15px/1.45 var(--ui)}
 .abs{position:absolute}
@@ -411,7 +419,7 @@ kbd{background:var(--n4);border:1px solid var(--rule2);border-bottom-width:3px;b
 #panel[data-kind=meetingLive]{width:min(820px,calc(100vw - 32px))}
 .group-discussion{display:flex;flex-direction:column;gap:14px}
 .group-discussion h3{margin-bottom:0!important}
-.group-participants{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;max-height:170px;overflow:auto}
+.group-participants{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
 .group-person{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--rule);cursor:pointer}
 .group-person:has(input:checked){border-color:var(--signal);background:rgba(255,200,0,.06)}
 .group-person input{width:18px!important;height:18px;flex:none;accent-color:var(--signal)}

@@ -4,7 +4,9 @@
   const T = THREE;
   const $ = s => document.querySelector(s);
   const stage = $('#stage');
-  const renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  let renderer;
+  try { renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); }
+  catch { const notice = document.createElement('div'); notice.className = 'screen'; const message = document.createElement('p'); message.textContent = 'Deskly could not start 3D graphics. Enable hardware acceleration and update your graphics driver, then retry.'; const retry = document.createElement('button'); retry.textContent = 'Retry graphics'; retry.onclick = () => location.reload(); notice.append(message, retry); document.body.append(notice); return; }
   renderer.outputEncoding = T.sRGBEncoding;
   renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
@@ -12,10 +14,10 @@
   stage.appendChild(renderer.domElement);
   let contextNotice;
   renderer.domElement.addEventListener('webglcontextlost', event => {
-    event.preventDefault(); contextNotice = document.createElement('div'); contextNotice.className = 'screen'; contextNotice.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;place-content:center;background:#171a15;color:white;text-align:center';
+    event.preventDefault(); if (contextNotice) return; contextNotice = document.createElement('div'); contextNotice.className = 'screen'; contextNotice.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;place-content:center;background:#171a15;color:white;text-align:center';
     const title = document.createElement('h2'); title.textContent = 'Recovering office graphics'; const message = document.createElement('p'); message.textContent = 'Your agent tasks are safe. Reload the office if graphics do not return.'; const retry = document.createElement('button'); retry.className='btn primary'; retry.textContent='Reload office'; retry.onclick=()=>location.reload(); contextNotice.append(title,message,retry); document.body.append(contextNotice);
   });
-  renderer.domElement.addEventListener('webglcontextrestored', () => location.reload());
+  renderer.domElement.addEventListener('webglcontextrestored', () => { contextNotice?.remove(); contextNotice = null; location.reload(); });
   const performanceBudget = new DesklyPerformance(renderer);
   renderer.shadowMap.autoUpdate = false;
   const camera = new T.PerspectiveCamera(70, 1, 0.05, 240);
@@ -44,11 +46,12 @@
   } catch (e) { bootMsg.textContent = 'Deskly could not start: ' + e.message; console.error(e); return; }
   boot(1, 'Ready');
   const nav = new DesklyNav(data.grid);
-  const player = new DesklyPlayer(camera, renderer.domElement, nav);
+  const player = new DesklyPlayer(camera, renderer.domElement, nav, data.layout.spawn);
   const audio = new DesklyOfficeAudio();
   renderer.domElement.tabIndex = 0;
   Object.assign(app, { nav, player, data, audio });
   app.campus=world.campus;app.nav=app.campus.attach(app,nav);app.performance=performanceBudget;
+  app.nav.doorBlocked = (x, z) => world.doorBlocked(x, z);
   const bus = new DesklyRuntime.EventBus();
   const audit = { entries: [] };
   bus.on('*', ev => { if (!['task.progress', 'task.output'].includes(ev.type)) { audit.entries.push(ev); if (audit.entries.length > 400) audit.entries.shift(); } });
@@ -63,7 +66,17 @@
   world.setQuality(screens.settings().quality||'balanced');
   world.updateIndoorLights(camera.position);
   renderer.compile(world.scene,camera);
-  // Retain these two material sets so compiling them is not immediately
+  // compile() prepares programs but does not upload textures or geometry.
+  // Warm their GPU resources off-screen while the loading screen is visible.
+  const warmTarget = new T.WebGLRenderTarget(64, 64), cullState = [];
+  world.scene.traverse(mesh => {
+    if (!mesh.isMesh) return;
+    cullState.push([mesh, mesh.frustumCulled]); mesh.frustumCulled = false;
+    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) for (const value of Object.values(material || {})) if (value?.isTexture) renderer.initTexture(value);
+  });
+  try { renderer.setRenderTarget(warmTarget); renderer.shadowMap.needsUpdate = true; renderer.render(world.scene, camera); }
+  finally { renderer.setRenderTarget(null); warmTarget.dispose(); for (const [mesh, culled] of cullState) mesh.frustumCulled = culled; }
+  // Retain the shared material sets so compiling them is not immediately
   // undone by Three.js releasing their cached shader programs.
   for(const rig of warmRigs)world.scene.remove(rig.root);
   app.graphicsWarmups=warmRigs;
@@ -109,14 +122,16 @@
     // restore visible state for tasks that are still running
     for (const t of runtime.list()) {
       const e = app.office.byId(t.employeeId); if (!e) continue;
-      const st = { planning: 'PLANNING', queued: 'PLANNING', running: 'WORKING', reviewing: 'WORKING', waiting_for_approval: 'WAITING_FOR_APPROVAL' }[t.status];
+      const st = { planning: 'PLANNING', queued: 'PLANNING', running: 'WORKING', reviewing: 'WORKING', waiting_for_approval: 'WAITING_FOR_APPROVAL', failed: 'FAILED', interrupted: 'FAILED' }[t.status];
       if (st) e.setState(st); else if (t.status === 'completed' && !t.reviewed) e.setState('COMPLETED');
     }
     app.office.syncShift(true);
   }
   function rebuildTeam() {
-    for (const e of app.office.employees) { world.scene.remove(e.rig.root); e.rig.dispose?.(); if (e.screen) world.scene.remove(e.screen.plane); }
+    app.office.dispose?.();
+    for (const e of app.office.employees) { world.scene.remove(e.rig.root); e.rig.dispose?.(); if (e.screen) { world.scene.remove(e.screen.plane); e.screen.plane.geometry.dispose(); e.screen.plane.material.dispose(); e.screen.tex.dispose(); } }
     world.screens = world.screens.filter(s => s === app.ceoScreens?.[0] || s === app.ceoScreens?.[1]);
+    world.dayMaterials = null;
     buildOffice(false);
     ui.buildMinimapBase?.();
   }
@@ -186,12 +201,13 @@
     !app.office?.employees.some(e => e.posture === 'sit' && e.sitSeat === seat) &&
     !app.office?.meeting?.people.some(e => e.meetSeat === seat);
   let focus = null;
+  const focusLook = new T.Vector3(), focusVector = new T.Vector3();
   function findFocus() {
-    const f = player.forward(), eye = camera.position, look = new T.Vector3(); camera.getWorldDirection(look);
+    const f = player.forward(), eye = camera.position, look = focusLook; camera.getWorldDirection(look);
     let best = null, bs = 1e9;
     for (const e of app.office.employees) {
       if (!e.present) continue;
-      const v = new T.Vector3(e.pos.x, e.pos.y + (e.posture === 'sit' ? 1.05 : 1.35), e.pos.z).sub(eye), d = v.length();
+      const v = focusVector.set(e.pos.x, e.pos.y + (e.posture === 'sit' ? 1.05 : 1.35), e.pos.z).sub(eye), d = v.length();
       if (d > 3.2) continue;
       const ang = v.normalize().angleTo(look); if (ang > 0.55) continue;
       const sc = ang * 3 + d * 0.3; if (sc < bs) { bs = sc; best = { kind: 'emp', e }; }
@@ -200,7 +216,7 @@
     for (const e of app.office.employees) {
       const m = e.screenMarker;
       if (!m || !e.present) continue;
-      const v = new T.Vector3(m.p[0], m.p[1], m.p[2]).sub(eye), d = v.length();
+      const v = focusVector.set(m.p[0], m.p[1], m.p[2]).sub(eye), d = v.length();
       if (d > 2.25) continue;
       const ang = v.normalize().angleTo(look); if (ang > 0.48) continue;
       const sc = ang * 3 + d * 0.25;
@@ -250,7 +266,7 @@
   app.enterOffice = (fresh) => {
     if (!screens.cfg) return screens.setup();
     app.refreshClock();
-    if (!app.office) { buildOffice(true); player.pos.set(20, 0, -6.4); player.yaw = Math.PI; player.pitch = -0.02; app.time = 0; }
+    if (!app.office) { buildOffice(true); player.pos.set(app.data.layout.spawn.x, 0, app.data.layout.spawn.z); player.yaw = app.data.layout.spawn.yaw; player.pitch = -0.02; app.time = 0; }
     else if (app.teamSig !== teamSig(screens.cfg)) rebuildTeam();
     app.applySettings(); updateBadge();
     ui.buildMinimapBase?.();
@@ -298,11 +314,18 @@
 
   /* ---------- loop ---------- */
   let last = performance.now(), hudT = 0, mmT = 0, panelT = 0, skyT = 0, shiftT = 0, attract = 0;
+  let frameErrors = 0, renderAt = 0; const actorPositions = [];
   function frame(now) {
+    try {
+      if (app.sceneFault) return;
     const rawDt=(now-last)/1000,dt=Math.min(.05,rawDt);last=now;
     const screen = document.body.dataset.screen;
+    const panelOpen = !!ui.panelKind;
     const sceneVisible = !document.hidden && !['screen-setup', 'screen-settings'].includes(screen);
-    performanceBudget.update(rawDt,sceneVisible);
+    const interactiveScene = app.playing && !panelOpen;
+    const animatedMenu = screen === 'screen-start' && !panelOpen;
+    const continuousScene = interactiveScene || animatedMenu;
+    performanceBudget.update(rawDt,sceneVisible && continuousScene);
     skyT -= dt;
     if (skyT <= 0) { skyT = app.timeMode === 'preview' ? .5 : 5; app.refreshClock(); }
     if (app.office) {
@@ -310,40 +333,46 @@
       app.office.runArrivals(app.time);
       shiftT -= dt;
       if (shiftT <= 0) { shiftT = 1; app.office.syncShift(); }
-      for (const e of app.office.employees) e.update(dt);
+      app.characterStep = (app.characterStep || 0) + dt;
+      if (interactiveScene || app.characterStep >= .05) { for (const e of app.office.employees) e.update(app.characterStep); app.characterStep = 0; }
       life.update(dt);
     }
     if (app.playing || app.office) player.update(app.playing ? dt : 0);
-    app.campus.update(dt);
-    if (!app.office || (!app.playing && document.body.dataset.screen === 'screen-start')) {
+    if (animatedMenu) {
       attract += dt * 0.05;
       camera.position.set(30 + Math.cos(attract) * 34, 17 + Math.sin(attract * .7) * 3, 18 + Math.sin(attract) * 24);
       camera.lookAt(30, .5, 18);
     }
+    app.campus.update(dt);
     world.sky.mesh.position.copy(camera.position);
     world.sky.uniforms.drift.value = (now * 0.000002) % 1;
-    world.update(dt, app.office ? [player.pos, ...app.office.employees.filter(e => e.present).map(e => e.pos)] : []);
-    if (app.playing) { focus = findFocus(); ui.prompt(promptFor(focus)); } else ui.prompt(null);
+    actorPositions.length = 0; if (app.office) { actorPositions.push(player.pos); for (const e of app.office.employees) if (e.present) actorPositions.push(e.pos); }
+    world.update(dt, actorPositions);
+    if (interactiveScene) { focus = findFocus(); ui.prompt(promptFor(focus)); } else ui.prompt(null);
     $('#hud').hidden = !app.playing; $('#seatbar').hidden = !(app.playing && player.seated);
     const heldbar = $('#heldbar'), held = player.heldDrink;
     heldbar.hidden = !app.playing || !held;
     if (held && heldbar.dataset.drink !== held.type+held.remaining) { heldbar.dataset.drink=held.type+held.remaining; const title=document.createElement('b'), count=document.createElement('span'), key=document.createElement('kbd'), discard=document.createElement('kbd'); title.textContent=held.type==='coffee'?'COFFEE':'WATER';count.textContent='●'.repeat(Math.max(0,held.remaining))+'○'.repeat(Math.max(0,held.max-held.remaining));key.textContent='F';discard.textContent='R';heldbar.replaceChildren(title,count,key,' drink ',discard,' discard'); }
     $('#control-hint').hidden = !app.playing || player.locked || player.touch;
-    if(app.office&&app.playing){app.tagT=(app.tagT||0)-dt;if(app.tagT<=0){app.tagT=1/30;ui.tagsUpdate(camera);}}else if(ui.tags.size){$('#tags').replaceChildren();ui.tags.clear();}
+    if(app.office&&interactiveScene){app.tagT=(app.tagT||0)-dt;if(app.tagT<=0){app.tagT=1/30;ui.tagsUpdate(camera);}}else if(ui.tags.size){$('#tags').replaceChildren();ui.tags.clear();}
     hudT -= dt; mmT -= dt; panelT -= dt;
     if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clockInfo, app.timeMode === 'preview'); drawCeo();const status=$('#building-status');status.hidden=!app.playing||screens.settings().showFps===false;status.textContent=performanceBudget.fps+' FPS'; }
-    if (app.office && app.playing && mmT <= 0) { mmT = 0.2; ui.minimap(player, app.office.employees); }
+    if (app.office && interactiveScene && mmT <= 0) { mmT = 0.2; ui.minimap(player, app.office.employees); }
     if (panelT <= 0) { panelT = 0.33; ui.tick(); }
     app.lightT=(app.lightT||0)-dt;if(app.lightT<=0){app.lightT=.5;world.updateIndoorLights(camera.position);}
-    if (sceneVisible) {
+    if (sceneVisible && !contextNotice && (continuousScene || now - renderAt >= 200)) {
+      renderAt = now;
       world.setShadowFocus(camera.position);
       performanceBudget.shadow(dt,true);
       renderer.render(world.scene, camera);
     }
-    requestAnimationFrame(frame);
+    frameErrors = 0;
+    } catch (error) { app.frameFaults = (app.frameFaults || 0) + 1; console.error('Office frame failed', error); if (++frameErrors === 3) { app.sceneFault = true; app.playing = false; player.enabled = false; const body = document.createElement('div'), message = document.createElement('p'), retry = document.createElement('button'); message.textContent = 'Office graphics paused after repeated errors. Agent tasks are still saved.'; retry.textContent = 'Reload office'; retry.className = 'btn primary'; retry.onclick = () => location.reload(); body.append(message, retry); ui.open('graphics-recovery', ui.hdr('Office graphics paused', 'Reload to recover'), body); } }
+    finally { requestAnimationFrame(frame); }
   }
   app.applySettings = app.applySettings;
   (function initSettings() { const st = screens.settings(); player.sens = st.sensitivity; player.invertY = st.invertY; audio.setVolume(st.soundVolume); })();
+  world.dayMaterials = null;
   screens.start();
   requestAnimationFrame(frame);
 })();

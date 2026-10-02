@@ -81,8 +81,8 @@ def fitted(name,body):
     weights=np.maximum(weights,0);weights/=weights.sum(axis=1,keepdims=True)
     return positions,obj(PACK.read(name+'.obj').decode('utf-8',errors='replace'))[1],faces,weights,deleting
 
-def write_character(sex):
-    body=BASE+target('caucasian-'+sex+'-young.target')+target('universal-'+sex+'-young-averagemuscle-averageweight.target')
+def write_character(sex, identity='caucasian', outfit_id=None):
+    body=BASE+target(identity+'-'+sex+'-young.target')+target('universal-'+sex+'-young-averagemuscle-averageweight.target')
     min_y=body[:13380,1].min(); height=body[:13380,1].max()-min_y; factor=1.75/height
     def normalize(points): out=points.copy();out[:,1]-=min_y;return out*factor
     heads={name:normalize(body[RIG['joints'][bone['head']]].mean(axis=0)[None,:])[0] for name,bone in RIG['bones'].items()}
@@ -92,18 +92,35 @@ def write_character(sex):
     def block(bytes):
         nonlocal length
         pad=(-len(bytes))%4; index=len(doc['bufferViews']);doc['bufferViews'].append({'buffer':0,'byteOffset':length,'byteLength':len(bytes)});blocks.append(bytes+b'\0'*pad);length+=len(bytes)+pad;return index
-    def accessor(data,type,component,bounds=False):
+    def accessor(data,type,component,bounds=False,normalized=False):
         data=np.asarray(data);a={'bufferView':block(data.tobytes()),'componentType':component,'count':len(data),'type':type}
+        if bounds:a.update(min=data.min(axis=0).tolist(),max=data.max(axis=0).tolist())
+        if normalized:a['normalized']=True
+        doc['accessors'].append(a);return len(doc['accessors'])-1
+    def sparse_accessor(data,bounds=False):
+        data=np.asarray(data,dtype=np.float32)
+        rows=np.flatnonzero(np.any(data!=0,axis=1))
+        if len(rows)>len(data)*.7 or not len(rows):return accessor(data,'VEC3',5126,bounds)
+        index_type=np.uint16 if len(data)<65536 else np.uint32
+        a={'componentType':5126,'count':len(data),'type':'VEC3','sparse':{'count':len(rows),'indices':{'bufferView':block(rows.astype(index_type).tobytes()),'componentType':5123 if index_type==np.uint16 else 5125},'values':{'bufferView':block(data[rows].tobytes())}}}
         if bounds:a.update(min=data.min(axis=0).tolist(),max=data.max(axis=0).tolist())
         doc['accessors'].append(a);return len(doc['accessors'])-1
     def texture(filename):
-        image=Image.open(io.BytesIO(PACK.read(filename)));image.thumbnail((2048,2048),Image.Resampling.LANCZOS)
+        image=Image.open(io.BytesIO(PACK.read(filename)));image.thumbnail((1024,1024),Image.Resampling.LANCZOS)
         if filename.startswith(('hair/','eyebrows/')):
             # Neutralize the source dye while retaining strand detail and alpha.
             rgba=image.convert('RGBA');gray=rgba.convert('L');values=np.asarray(gray,dtype=np.float32)
             values=np.clip(np.power(values/255,.6)*200+25,0,255).astype(np.uint8)
             neutral=Image.fromarray(values);image=Image.merge('RGBA',(neutral,neutral,neutral,rgba.getchannel('A')))
-        output=io.BytesIO();image.save(output,format='PNG');doc['images'].append({'bufferView':block(output.getvalue()),'mimeType':'image/png'});doc['textures'].append({'sampler':0,'source':len(doc['images'])-1});return {'index':len(doc['textures'])-1}
+        output=io.BytesIO()
+        alpha='A' in image.getbands() and image.getchannel('A').getextrema()[0]<255
+        normal='_normal' in filename
+        if alpha or normal:image.thumbnail((512,512),Image.Resampling.LANCZOS)
+        if alpha or normal:
+            image.save(output,format='PNG',optimize=True);mime='image/png'
+        else:
+            image.convert('RGB').save(output,format='JPEG',quality=90,optimize=True,subsampling=0);mime='image/jpeg'
+        doc['images'].append({'bufferView':block(output.getvalue()),'mimeType':mime});doc['textures'].append({'sampler':0,'source':len(doc['images'])-1});return {'index':len(doc['textures'])-1}
     def material(name,diffuse,normal=None,roughness=.7,alpha=False):
         m={'name':name,'pbrMetallicRoughness':{'baseColorTexture':texture(diffuse),'metallicFactor':0,'roughnessFactor':roughness},'doubleSided':alpha}
         if normal:m['normalTexture']=dict(texture(normal),scale=.4)
@@ -112,11 +129,12 @@ def write_character(sex):
     skin=material('Skin','skins/young_caucasian_'+sex+'/young_lightskinned_'+sex+'_diffuse.png',roughness=.6)
     material('Skin_Medium','skins/young_asian_'+sex+'/young_lightskinned_'+sex+'_diffuse3.png',roughness=.6)
     material('Skin_Deep','skins/young_african_'+sex+'/young_darkskinned_'+sex+'_diffuse.png',roughness=.6)
-    outfit_id='female_elegantsuit01' if sex=='female' else 'male_casualsuit01'
+    outfit_id=outfit_id or ('female_elegantsuit01' if sex=='female' else 'male_casualsuit01')
     outfit_name='clothes/'+outfit_id+'/'+outfit_id
     cloth=fitted(outfit_name,body)
     shoe_name='clothes/shoes03/shoes03';shoe_fit=fitted(shoe_name,body)
-    outfit=material('Outfit',outfit_name+'_diffuse.png',outfit_name+'_normal.png',.84)
+    normal=outfit_name+'_normal.png'
+    outfit=material('Outfit',outfit_name+'_diffuse.png',normal if normal in PACK.namelist() else None,.84)
     hair_names=['hair/short01/short01','hair/bob01/bob01','hair/ponytail01/ponytail01']
     hair_materials=[material('Hair_'+str(i),n+'_diffuse.png',roughness=.72,alpha=True) for i,n in enumerate(hair_names)]
     eye=material('Eyes','eyes/materials/brown_eye.png',roughness=.22,alpha=True)
@@ -124,8 +142,9 @@ def write_character(sex):
     shoe_material=material('Shoes',shoe_name+'_diffuse.png',roughness=.65)
     face_masks={}
     neck=heads['neck01'][1]/factor+min_y
-    for name,ancestry in [('Face_A','african'),('Face_B','asian')]:
-        delta=(target(ancestry+'-'+sex+'-young.target')-target('caucasian-'+sex+'-young.target'))*factor
+    alternatives=[a for a in ['african','asian','caucasian'] if a!=identity]
+    for name,ancestry in zip(['Face_A','Face_B'],alternatives):
+        delta=(target(ancestry+'-'+sex+'-young.target')-target(identity+'-'+sex+'-young.target'))*factor
         # Source identity targets also change stature. Facial customization
         # must remain anchored to this character's existing head skeleton.
         head_anchor=RIG['joints'][RIG['bones']['head']['head']]
@@ -195,8 +214,11 @@ def write_character(sex):
         if head_only:w=np.zeros_like(w);w[:,BI['head']]=1
         joints=np.argsort(w,axis=1)[:,-4:][:,::-1].astype(np.uint16); selected=np.take_along_axis(w,joints,axis=1).astype(np.float32);selected/=selected.sum(axis=1,keepdims=True)
         texture_uv[:,1]=1-texture_uv[:,1]
-        attr={'POSITION':accessor(p,'VEC3',5126,True),'NORMAL':accessor(normals,'VEC3',5126),'TEXCOORD_0':accessor(texture_uv,'VEC2',5126),'JOINTS_0':accessor(joints,'VEC4',5123),'WEIGHTS_0':accessor(selected,'VEC4',5126)}
-        primitive={'attributes':attr,'indices':accessor(np.array(indices,dtype=np.uint32),'SCALAR',5125),'material':mat}
+        encoded_weights=np.rint(selected*65535).astype(np.int32)
+        encoded_weights[:,0]+=65535-encoded_weights.sum(axis=1)
+        attr={'POSITION':accessor(p,'VEC3',5126,True),'NORMAL':accessor(normals,'VEC3',5126),'TEXCOORD_0':accessor(np.rint(np.clip(texture_uv,0,1)*65535).astype(np.uint16),'VEC2',5123,normalized=True),'JOINTS_0':accessor(joints.astype(np.uint8),'VEC4',5121),'WEIGHTS_0':accessor(encoded_weights.astype(np.uint16),'VEC4',5123,normalized=True)}
+        compact=len(p)<65536
+        primitive={'attributes':attr,'indices':accessor(np.array(indices,dtype=np.uint16 if compact else np.uint32),'SCALAR',5123 if compact else 5125),'material':mat}
         m={'name':name,'primitives':[primitive]}
         if morph:
             primitive['targets']=[]
@@ -205,7 +227,7 @@ def write_character(sex):
                 accum=np.zeros_like(source_normals)
                 for j in range(3):np.add.at(accum,ids[tri[:,j]],cross)
                 moved_n=accum[ids];moved_n/=np.maximum(np.linalg.norm(moved_n,axis=1,keepdims=True),1e-8)
-                primitive['targets'].append({'POSITION':accessor(d.astype(np.float32),'VEC3',5126,True),'NORMAL':accessor((moved_n-normals).astype(np.float32),'VEC3',5126)})
+                primitive['targets'].append({'POSITION':sparse_accessor(d,True),'NORMAL':sparse_accessor(moved_n-normals)})
             m['weights']=[0,0];m['extras']={'targetNames':list(face_masks)}
         doc['meshes'].append(m);index=len(doc['nodes']);doc['nodes'].append({'name':name,'mesh':len(doc['meshes'])-1,'skin':0});doc['scenes'][0]['nodes'].append(index)
         print(sex,name,len(indices)//3,'triangles')
@@ -229,11 +251,14 @@ def write_character(sex):
     data=b''.join(blocks);doc['buffers']=[{'byteLength':len(data)}]
     raw=json.dumps(doc,separators=(',',':')).encode();raw+=b' '*((-len(raw))%4)
     glb=struct.pack('<III',0x46546c67,2,12+8+len(raw)+8+len(data))+struct.pack('<II',len(raw),0x4e4f534a)+raw+struct.pack('<II',len(data),0x004e4942)+data
-    filename='employee-'+sex+'.glb';(OUT/filename).write_bytes(glb)
-    return {'id':'employee-'+sex,'label':'Detailed '+('broad' if sex=='male' else 'narrow')+' build','body':sex,'path':'assets/characters/'+filename,'driver':'deskly','rightHand':'wrist.R','skinMaterials':['Skin','Skin_Medium','Skin_Deep'],'referenceSeatHeight':.5,'sha256':hashlib.sha256(glb).hexdigest()}
+    model_id='employee-'+sex+('' if identity=='caucasian' else '-'+identity)
+    filename=model_id+'.glb';(OUT/filename).write_bytes(glb)
+    label='Detailed '+('broad' if sex=='male' else 'narrow')+' build'+(' · alternate face and outfit' if identity!='caucasian' else '')
+    return {'id':model_id,'label':label,'body':sex,'sourceIdentity':identity,'outfit':outfit_id,'path':'assets/characters/'+filename,'driver':'deskly','rightHand':'wrist.R','skinMaterials':['Skin','Skin_Medium','Skin_Deep'],'referenceSeatHeight':.5,'sha256':hashlib.sha256(glb).hexdigest()}
 
 if __name__=='__main__':
     models=[write_character(sex) for sex in ['male','female']]
+    models.extend([write_character('male','african','male_elegantsuit01'),write_character('female','asian','female_casualsuit02')])
     (OUT/'manifest.json').write_text(json.dumps({'version':1,'models':models},indent=2)+'\n')
     (OUT/'LICENSE-MakeHuman.txt').write_text((SRC/'LICENSE.md').read_text())
     (OUT/'sources.json').write_text(json.dumps({'license':'CC0-1.0','graphicsSource':'https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html','pack':'https://files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip','packSha256':hashlib.sha256((ROOT/'.cache/asset-sources/makehuman-system.zip').read_bytes()).hexdigest(),'core':json.loads((SRC/'sources.json').read_text())},indent=2)+'\n')

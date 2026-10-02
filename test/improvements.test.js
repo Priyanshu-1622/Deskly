@@ -38,7 +38,7 @@ test('project maps reject unsafe paths and preserve malformed originals with a w
 });
 test('secret paths and Windows aliases cannot be read, written or listed; normal files work', () => {
   const ws = new Workspace(tmp());
-  const blocked = ['.env', '.env.local', '.envrc', '.npmrc', '.pypirc', '.netrc', '.git-credentials', '.git/config', '.aws/credentials', '.ssh/config', '.kube/config', '.docker/config.json', 'id_test', 'cert.pem', 'cert.key', 'cert.p12', 'cert.pfx', 'service-account.json'];
+  const blocked = ['.env', '.env.local', '.envrc', '.npmrc', '.pypirc', '.netrc', '.git-credentials', '.git/config', '.aws/credentials', '.ssh/config', '.kube/config', '.docker/config.json', 'id_rsa', 'cert.pem', 'cert.key', 'cert.p12', 'cert.pfx', 'service-account.json'];
   for (const file of blocked) { fs.mkdirSync(path.dirname(path.join(ws.root, file)), { recursive: true }); fs.writeFileSync(path.join(ws.root, file), 'private'); assert.throws(() => ws.readFile(file), /secrets/); assert.throws(() => ws.writeFile(file, 'replace'), /secrets/); }
   for (const alias of ['.env.', '.env ', '.env::$DATA', 'nested/.npmrc.', 'ENV~1', 'safe\0.txt']) { assert.throws(() => ws.readFile(alias)); assert.throws(() => ws.writeFile(alias, 'x')); }
   assert.equal(ws.listDir().some(f => blocked.includes(f.path)), false);

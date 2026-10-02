@@ -68,6 +68,8 @@
     workspaceChoose: async () => 'Browser workspace',
     workspaceList: async () => [...files.keys()].sort().map(p => ({ path: p, dir: false })),
     workspaceRead: async p => { if (!files.has(p)) throw new Error('File not found'); return files.get(p); },
+    workspaceEditorRead: async p => { if (!files.has(p)) throw new Error('File not found'); const text = files.get(p); return { text, readOnly: false, version: text, eol: '\n', bytes: text.length }; },
+    workspaceEditorSave: async (p, text, version) => { if (version === null && files.has(p)) throw new Error('File already exists'); if (version !== null && files.get(p) !== version) throw new Error('File changed; reopen it before saving.'); files.set(p, text); saveFiles(); return { text, version: text, readOnly: false }; },
     workspaceWrite: async (p, c) => { files.set(p, c); saveFiles(); return { path: p, bytes: c.length }; },
     workspaceOpen: async () => true,
     terminalRun: async cmd => ({ code: 0, stdout: `(browser build) The terminal runs commands in the desktop app.\n> ${cmd}`, stderr: '' }),
@@ -94,6 +96,7 @@
     diagnosticsExport: async () => { throw Error('Diagnostic reports are available in the desktop app.'); },
     employeeReply: async (id, ctx) => `(demo) I'm ${ctx}. In the desktop app with an API key I'd give you a real answer.`,
     meetingIdeas: async (topic, people) => people.map(p => ({ id: p.id, line: `(demo) From ${p.role}: I'd look at how "${topic}" changes my current work.` })),
+    meetingCancel: async () => true,
     groupList: async () => groups.filter(s => s.project === (cfg()?.workspace || null)).map(pub).reverse(),
     groupGet: async id => pub(groupGet(id)),
     groupStart: async (room, topic, ids) => {
@@ -123,6 +126,7 @@
     },
     groupCancel: async id => { const s = groupGet(id), round = groupRounds.get(id); if (round) round.stopped = true; return pub(s); },
     groupEnd: async id => { const s = groupGet(id), round = groupRounds.get(id); if (round) round.stopped = true; s.status = 'ended'; s.speakerId = null; groupSave(); return pub(s); },
+    groupDelete: async id => { const s = groupGet(id); if (s.status === 'running') throw new Error('Stop this discussion first.'); groups.splice(groups.indexOf(s), 1); groupSave(); return true; },
     groupDecision: async (id, text) => {
       const s = groupGet(id);
       if (s.status !== 'idle' || !text.trim() || text.length > 700) throw Error('Finish the round and enter a decision of up to 700 characters.');

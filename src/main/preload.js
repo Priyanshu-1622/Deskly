@@ -7,11 +7,11 @@ const call = async (ch, ...args) => {
   return r.value;
 };
 const api = {};
-for (const ch of ['app:info', 'config:get', 'config:save', 'config:reset', 'data:erase', 'secret:set', 'provider:test', 'workspace:choose', 'workspace:ignore-map', 'workspace:list',
-  'workspace:read', 'workspace:write', 'workspace:open', 'terminal:run', 'tasks:snapshot', 'tasks:create', 'tasks:resume', 'tasks:cancel', 'tasks:clear',
-  'tasks:reviewed', 'approval:respond', 'memory:list', 'memory:add', 'memory:update', 'memory:delete', 'team:updates', 'usage:get', 'audit:list', 'audit:export', 'employee:reply', 'meeting:ideas', 'assistant:chat', 'shell:external',
-  'group:list','group:start','group:get','group:send','group:cancel','group:end','group:decision','diagnostics:export', 'app:fullscreen', 'app:quit']) {
-  const name = ch.replace(/[:](\w)/, (_, c) => c.toUpperCase());       // "config:get" -> "configGet"
+for (const ch of ['app:info', 'updates:status', 'updates:check', 'updates:install', 'config:get', 'config:save', 'config:reset', 'data:erase', 'secret:set', 'provider:test', 'workspace:choose', 'workspace:ignore-map', 'workspace:list',
+  'workspace:read', 'workspace:write', 'workspace:editor-read', 'workspace:editor-list', 'workspace:editor-save', 'workspace:open', 'terminal:run', 'tasks:snapshot', 'tasks:create', 'tasks:resume', 'tasks:cancel', 'tasks:clear',
+  'tasks:reviewed', 'approval:respond', 'memory:list', 'memory:add', 'memory:update', 'memory:delete', 'team:updates', 'usage:get', 'audit:list', 'audit:export', 'employee:reply', 'meeting:ideas', 'meeting:cancel', 'assistant:chat', 'shell:external',
+  'group:list','group:start','group:get','group:send','group:cancel','group:end','group:delete','group:decision','diagnostics:export', 'app:fullscreen', 'app:quit']) {
+  const name = ch.replace(/[:-](\w)/g, (_, c) => c.toUpperCase());
   api[name] = (...a) => call(ch, ...a);
 }
 api.onRuntimeEvent = fn => {
@@ -20,4 +20,9 @@ api.onRuntimeEvent = fn => {
   return () => ipcRenderer.removeListener('runtime:event', l);
 };
 api.native = true;
+api.onUpdatesChanged = fn => {
+  const listener = (_event, state) => fn(state);
+  ipcRenderer.on('updates:changed', listener);
+  return () => ipcRenderer.removeListener('updates:changed', listener);
+};
 contextBridge.exposeInMainWorld('desklyNative', api);

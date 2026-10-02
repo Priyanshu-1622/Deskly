@@ -20,8 +20,12 @@ Only selected meeting speakers request replies. Posting a message alone makes no
 
 **Settings → Privacy & data → Save diagnostic report** exports only system/app versions, selected settings and activity counts. It excludes names, keys, project paths, file contents, prompts, memories, conversations, provider endpoints and raw errors. You choose where it saves and whether to share it. Nothing uploads automatically.
 
-Audit exports and board backups can contain private text. Review them before sharing. Damaged local files are preserved for recovery; atomic writes retain a backup. Interrupted task checkpoints expire after three days. Clearing finished task history also removes its saved checkpoints. Ended meeting histories remain saved until you erase Deskly data.
+Audit exports and board backups can contain private text. Review them before sharing. Approval audit records store action type and risk, without the command or file content; the live approval still shows the complete action for review. Task checkpoints retain model messages, which can include commands and project content. Do not put credentials in prompts or commands. Damaged local files are preserved for recovery; atomic writes retain a backup. Interrupted task checkpoints expire after three days. Clearing finished task history also removes its saved checkpoints. Saved meeting histories can be deleted individually or erased with all Deskly data.
 
 **Erase all Deskly data** removes the app profile after confirmation and restarts with fresh settings. Your project files are kept. **Reset settings & keys** only clears those settings and keys; it does not erase all other records. Removing the app is not a reliable substitute for erasing its local data.
 
 Report a suspected private-data exposure using the process in [SECURITY.md](../SECURITY.md). Avoid posting keys, raw task logs or confidential project content in public issues.
+
+## Update checks
+
+Installed Windows builds contact this repository’s public GitHub Releases at startup and every six hours and download newer installers. GitHub receives ordinary network request information, including IP address and app update requests. No API keys, project text or conversations are sent by the updater. Installation requires restart confirmation. Source builds do not make automatic update requests.

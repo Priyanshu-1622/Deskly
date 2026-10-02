@@ -1,6 +1,28 @@
 /* Authored, in-place GLB characters behind the existing employee rig API. */
 (() => {
   const T = THREE, loaded = new Map();
+  const detailCache = new WeakMap();
+  function details(geometry) {
+    if (detailCache.has(geometry)) return detailCache.get(geometry);
+    const position = geometry.attributes.position, joints = geometry.attributes.skinIndex, source = geometry.index;
+    if (!source || !position || source.count < 1200) return [geometry, geometry, geometry];
+    const variants = [geometry];
+    for (const cell of [.035, .085]) {
+      const representatives = new Map(), remap = new Uint32Array(position.count), indices = [];
+      for (let i = 0; i < position.count; i++) {
+        const key = `${Math.round(position.getX(i)/cell)},${Math.round(position.getY(i)/cell)},${Math.round(position.getZ(i)/cell)},${joints?.getX(i) || 0}`;
+        if (!representatives.has(key)) representatives.set(key, i);
+        remap[i] = representatives.get(key);
+      }
+      for (let i = 0; i < source.count; i += 3) { const a = remap[source.getX(i)], b = remap[source.getX(i+1)], c = remap[source.getX(i+2)]; if (a !== b && b !== c && c !== a) indices.push(a,b,c); }
+      const reduced = new T.BufferGeometry();
+      for (const [name, attribute] of Object.entries(geometry.attributes)) reduced.setAttribute(name, attribute);
+      reduced.morphAttributes = geometry.morphAttributes; reduced.morphTargetsRelative = geometry.morphTargetsRelative;
+      reduced.setIndex(indices); reduced.boundingBox = geometry.boundingBox; reduced.boundingSphere = geometry.boundingSphere;
+      variants.push(reduced);
+    }
+    detailCache.set(geometry, variants); return variants;
+  }
   function named(root,name){let found=root.getObjectByName(name);if(!found)root.traverse(o=>{if(o.userData.name===name)found=o;});return found;}
   async function load() {
     const manifest = await fetch('assets/characters/manifest.json').then(r => { if (!r.ok) throw new Error('Character manifest unavailable'); return r.json(); });
@@ -67,6 +89,8 @@
     rig.setMode('stand'); return rig;
   }
   function buildDriven(root,model,look,s,skinMaterials,sharedGeometry) {
+    const detailMeshes = []; let detail = 0;
+    model.traverse(mesh => { if (mesh.isSkinnedMesh && !/Eyeballs|Eyebrows/.test(mesh.name)) { const variants = details(mesh.geometry); variants.forEach(g => sharedGeometry.add(g)); detailMeshes.push({ mesh, variants }); } });
     // The existing behaviour animator drives an authored skin; its primitive
     // meshes never enter the visible scene. Each employee retains a private rig.
     const driver=Human.build({...look,height:1.75}), temporary=driver.root;
@@ -86,7 +110,7 @@
     if(look.shirt)mat('Outfit')?.color.copy(new T.Color(look.shirt).lerp(new T.Color('#ffffff'),.48));
     const style=look.detailedHair ?? (['bob','long','braids'].includes(look.hairStyle)?1:['pony','ponytail','bun'].includes(look.hairStyle)?2:0);
     mat('Brows')?.color.set(look.hair||'#3a2618');
-    for(let i=0;i<3;i++){const hair=model.getObjectByName('Hair_'+i);if(hair)hair.visible=i===Number(style);mat('Hair_'+i)?.color.set(look.hair||'#ffffff');}
+    for(let i=0;i<3;i++){const hair=model.getObjectByName('Hair_'+i);if(hair && i!==Number(style)){hair.removeFromParent();hair.skeleton?.dispose();}mat('Hair_'+i)?.color.set(look.hair||'#ffffff');}
     const a=Math.max(0,Math.min(1,Number(look.faceA)||0)),b=Math.max(0,Math.min(1,Number(look.faceB)||0)),div=Math.max(1,a+b);
     model.traverse(mesh=>{if(mesh.morphTargetInfluences){mesh.morphTargetInfluences[0]=a/div;mesh.morphTargetInfluences[1]=b/div;}});
     model.scale.x*=Math.max(.85,Math.min(1.15,Number(look.buildWidth)||1));
@@ -113,6 +137,7 @@
     const feet=['L','R'].map(side=>named(model,'foot.'+side)),footPoint=new T.Vector3();
     let mode='stand';
     const rig={root,s,cup,phone,seatH:.5,speed:0,talking:0,look:null,
+      setDetail(distance){const next=distance<10?0:distance<24?1:2;if(next===detail)return;detail=next;for(const {mesh,variants}of detailMeshes)mesh.geometry=variants[next];},
       dispose(){root.traverse(o=>{if(o.geometry&&!sharedGeometry.has(o.geometry))o.geometry.dispose();o.skeleton?.dispose();});for(const material of materials.values())material.dispose();},
       setMode(next){mode=next;driver.setMode(next);},
       update(dt,yaw){

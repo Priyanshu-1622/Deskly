@@ -113,10 +113,22 @@ test('game trees are compact, self-contained and use supported texture channels'
     for(const material of gltf.materials)assert.equal(material.pbrMetallicRoughness.baseColorTexture.texCoord||0,0);
   }
 });
+test('distant tree detail stays within budget and retains valid original vertex indices', () => {
+  const detail=JSON.parse(fs.readFileSync(path.join(assets,'tree-lods.json')));
+  for(const [id,meshes]of Object.entries(detail)){
+    const doc=JSON.parse(fs.readFileSync(path.join(assets,'models',id,id+'-game.gltf'))),counts=[0,0];
+    meshes.forEach((primitives,m)=>primitives.forEach((levels,p)=>levels.forEach((encoded,level)=>{
+      const data=Buffer.from(encoded,'base64'),count=doc.accessors[doc.meshes[m].primitives[p].attributes.POSITION].count;
+      assert.equal(data.length%12,0);counts[level]+=data.length/12;
+      for(let i=0;i<data.length;i+=4)assert.ok(data.readUInt32LE(i)<count);
+    })));
+    assert.ok(counts[0]<=15000);assert.ok(counts[1]<=3000);assert.ok(counts[0]>counts[1]);
+  }
+});
 
 test('detailed employees bundle a valid skin, facial morphs, hair and transparent eye maps', () => {
   const manifest=JSON.parse(fs.readFileSync(path.join(assets,'characters/manifest.json')));
-  assert.equal(manifest.models.length,2);
+  assert.equal(manifest.models.length,4);
   for(const entry of manifest.models){
     const bytes=fs.readFileSync(path.join(assets,entry.path.replace('assets/','')));
     assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),entry.sha256);
@@ -126,7 +138,7 @@ test('detailed employees bundle a valid skin, facial morphs, hair and transparen
     for(const mesh of gltf.meshes)for(const p of mesh.primitives){
       const w=gltf.accessors[p.attributes.WEIGHTS_0],v=gltf.bufferViews[w.bufferView];
       for(let i=0;i<w.count;i++){
-        let sum=0;for(let j=0;j<4;j++){const weight=bytes.readFloatLE(binaryStart+v.byteOffset+i*16+j*4);assert.ok(weight>=0);sum+=weight;}
+        let sum=0;for(let j=0;j<4;j++){const weight=w.componentType===5123&&w.normalized?bytes.readUInt16LE(binaryStart+v.byteOffset+i*8+j*2)/65535:bytes.readFloatLE(binaryStart+v.byteOffset+i*16+j*4);assert.ok(weight>=0);sum+=weight;}
         assert.ok(Math.abs(sum-1)<.0001);
       }
       if(!['Clothes','Shoes'].includes(mesh.name)){

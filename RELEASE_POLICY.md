@@ -12,7 +12,9 @@ Windows signing uses `CSC_LINK` and `CSC_KEY_PASSWORD`. macOS signing and notari
 
 ## Updates
 
-For the first public version, use manual updates from the GitHub Releases page. Publish versioned installers, SHA-256 checksums and release notes. Download and close Deskly before installing a newer release. Back up local app data and project files before an incompatible migration. Do not serve executable updates from arbitrary renderer URLs. Automatic updates are deferred until signed artifacts, rollback and migration tests exist.
+Installed Windows builds check this repository's public GitHub Releases at startup and every six hours using electron-updater. New versions download automatically; installation requires an explicit restart confirmation and no active tasks, conversations or commands. Save unsaved editor text and settings first. The main process fixes the provider; renderer IPC cannot supply an update URL or file. Downgrades and install-on-quit are disabled. Publish the versioned NSIS installer, its blockmap, latest.yml, SHA-256 checksums and release notes together. Each release needs a greater version than the previous release. Keep the GitHub release non-prerelease so the stable updater can discover it; clearly label 0.x versions as early access in the release title and notes.
+
+Manual downloads remain available from GitHub Releases. The first Windows installer is unsigned: HTTPS and manifest checksums protect transfer integrity but do not establish a signed publisher. Preserve signature verification defaults; add publisher signing when credentials are available. Automatic rollback and clean-machine update migration testing remain release gates. Back up local app data and projects before incompatible migrations.
 
 Weekly Dependabot and full audit checks track dependencies. For a confirmed vulnerability, prepare a tested patch release promptly and explain the affected versions. Never advertise a clean dependency audit as proof that all application code is secure.
 

@@ -61,8 +61,8 @@
       const interior = (1 - smooth(-3, 15, position.elevation)) * (this.lightingMode === 'focus' ? 0.72 : 0.88);
       for (const light of this.indoor) light.intensity = .5 + interior;
       for (const light of this.indoorSlots) light.intensity = .5 + interior;
-      const materials = new Set();
-      this.scene.traverse(o => { if (o.isMesh) for (const material of (Array.isArray(o.material) ? o.material : [o.material])) if (material?.isMeshStandardMaterial) materials.add(material); });
+      const materials = this.dayMaterials || (this.dayMaterials = new Set());
+      if (!materials.size) this.scene.traverse(o => { if (o.isMesh) for (const material of (Array.isArray(o.material) ? o.material : [o.material])) if (material?.isMeshStandardMaterial) materials.add(material); });
       for (const material of materials) {
         material.userData.dayEnvironmentIntensity ??= material.envMapIntensity;
         material.envMapIntensity = material.userData.dayEnvironmentIntensity * (0.16 + day * 0.84);
@@ -85,7 +85,9 @@
     }
 
     setQuality(quality) {
+      const changed = this.renderer.shadowMap.enabled !== (quality !== 'low');
       this.renderer.shadowMap.enabled = quality !== 'low';
+      if (changed) this.scene.traverse(o => { if (o.isMesh) for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (material) material.needsUpdate = true; });
       const size = quality === 'high' ? 2048 : 1024;
       if (this.sun.shadow.mapSize.x !== size) {
         this.sun.shadow.mapSize.set(size, size);
@@ -180,9 +182,10 @@
         const w = d.s1 - d.s0 - 0.08, h = d.top - 0.03, kind = d.kind;
         const along = d.axis === 'x' ? new T.Vector3(1, 0, 0) : new T.Vector3(0, 0, 1);
         const c = d.axis === 'x' ? new T.Vector3((d.s0 + d.s1) / 2, 0, d.fixed) : new T.Vector3(d.fixed, 0, (d.s0 + d.s1) / 2);
-        const door = { d, c, kind, open: 0, panels: [] };
+        const door = { d, c, axis: d.axis, kind, open: 0, panels: [] };
         const makePanel = (pw, mat) => {
           const g = new T.Group();
+          g.userData.doorWidth = pw;
           const p = new T.Mesh(new T.BoxGeometry(pw, h, 0.045), mat); p.position.set(pw / 2, h / 2 + 0.01, 0);
           this.finish(p, mat === glass ? 'glass' : mat === wood ? 'door_wood' : 'steel'); g.add(p);
           if (mat !== glass) {
@@ -223,17 +226,29 @@
       }
     }
 
+    doorBlocked(x, z) {
+      for (const door of this.doors) {
+        if (Math.hypot(x-door.c.x, z-door.c.z) > 3.5) continue;
+        for (const { g } of door.panels) {
+          const width = g.userData.doorWidth, dx = Math.cos(g.rotation.y)*width, dz = -Math.sin(g.rotation.y)*width;
+          const px = x-g.position.x, pz = z-g.position.z, t = Math.max(0, Math.min(1, (px*dx+pz*dz)/(width*width)));
+          if (Math.hypot(px-t*dx, pz-t*dz) < .07) return true;
+        }
+      }
+      return false;
+    }
     update(dt, agentsPositions) {
       for (const door of this.doors) {
-        let near = false;
-        for (const p of agentsPositions) { if (Math.abs(p.x - door.c.x) < 1.7 && Math.abs(p.z - door.c.z) < 1.7) { near = true; break; } }
+        let near = false, nearest;
+        for (const p of agentsPositions) { if (Math.abs(p.x - door.c.x) < 1.7 && Math.abs(p.z - door.c.z) < 1.7) { near = true; nearest = p; break; } }
+        if (near && !door.wasNear && !door.slide) door.swing = door.axis === 'x' ? (nearest.z < door.c.z ? -1 : 1) : (nearest.x < door.c.x ? 1 : -1);
         const target = near ? 1 : 0;
         if (door.wasNear !== undefined && door.wasNear !== near) this.onDoor?.(door, near);
         door.wasNear = near;
         door.open += (target - door.open) * Math.min(1, dt * (near ? 5 : 2.5));
         for (const pn of door.panels) {
           if (door.slide) pn.g.position.copy(pn.base).addScaledVector(pn.dir, door.open);
-          else pn.g.rotation.y = pn.baseRot + door.open * 1.45;
+          else pn.g.rotation.y = pn.baseRot + door.open * 1.45 * (door.swing || 1);
         }
       }
       for (const L of this.lifts) {

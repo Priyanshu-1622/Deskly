@@ -8,13 +8,13 @@ const text = (v, max = 2000, empty = true) => { if (typeof v !== 'string' || v.l
 const id = v => { text(v, 100, false); if (!/^[a-zA-Z0-9_-]+$/.test(v) || ['__proto__', 'constructor', 'prototype'].includes(v)) fail('invalid identifier'); };
 const choice = (v, values) => { if (!values.includes(v)) fail('unsupported option'); };
 const number = (v, min, max) => { if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max) fail('invalid number'); };
-function profile(v) {
+function profile(v, incomplete = false) {
   object(v); choice(v.provider || 'demo', Object.keys(PROVIDERS));
   for (const k of ['model', 'lightweightModel']) if (v[k] !== undefined) text(v[k], 150);
   if (v.baseUrl !== undefined) text(v.baseUrl, 2048);
   if (v.apiKey !== undefined) text(v.apiKey, 16000);
   if (v.keyFrom) id(v.keyFrom);
-  endpointFor({ ...v, provider: v.provider || 'demo' });
+  if (!(incomplete && v.provider === 'custom' && !v.baseUrl?.trim())) endpointFor({ ...v, provider: v.provider || 'demo' });
 }
 function workspacePath(value) {
   text(value, 2048, false);
@@ -36,25 +36,33 @@ function config(value) {
   if (value.workspace !== undefined) text(value.workspace, 2048);
   const ids = new Set(['assistant']);
   for (const e of value.employees) {
-    profile(e); id(e.id); if (ids.has(e.id)) fail('duplicate employee identifier'); ids.add(e.id);
+    profile(e, true); id(e.id); if (ids.has(e.id)) fail('duplicate employee identifier'); ids.add(e.id);
     for (const k of ['name', 'role', 'dept', 'room', 'deliverable']) if (e[k] !== undefined) text(e[k], 150);
     for (const k of ['persona', 'scope', 'instructions']) if (e[k] !== undefined) text(e[k], 10000);
     if (e.workArea !== undefined) choice(e.workArea, ['frontend', 'backend', 'shared', 'docs', 'operations']);
     if (e.resume !== undefined) { object(e.resume); for (const list of Object.values(e.resume)) { if (!Array.isArray(list) || list.length > 100) fail('invalid resume'); list.forEach(v => text(v, 500)); } }
     if (e.look !== undefined) { object(e.look); for (const v of Object.values(e.look)) { if (typeof v === 'number') number(v, -100, 100); else if (typeof v === 'string') text(v, 100); else if (v !== null && typeof v !== 'boolean') fail('invalid appearance'); } }
   }
-  if (value.assistant) profile(value.assistant);
-  for (const e of [...value.employees, value.assistant || {}]) if (e.keyFrom) { if (!ids.has(e.keyFrom)) fail('unknown key owner'); const owner = e.keyFrom === 'assistant' ? value.assistant : value.employees.find(p => p.id === e.keyFrom); if (!owner || e.provider !== owner.provider || endpointFor(e) !== endpointFor(owner)) fail('shared keys must use the same provider and endpoint'); }
+  if (value.assistant) profile(value.assistant, true);
+  for (const e of [...value.employees, value.assistant || {}]) if (e.keyFrom) { if (!ids.has(e.keyFrom)) fail('unknown key owner'); const owner = e.keyFrom === 'assistant' ? value.assistant : value.employees.find(p => p.id === e.keyFrom); if (!owner || e.provider !== owner.provider || (!(e.provider === 'custom' && !e.baseUrl?.trim() && !owner.baseUrl?.trim()) && endpointFor(e) !== endpointFor(owner))) fail('shared keys must use the same provider and endpoint'); }
+  for (const first of [...value.employees, { ...value.assistant, id: 'assistant' }]) {
+    const seen = new Set([first.id]); let next = first.keyFrom;
+    while (next) { if (seen.has(next)) fail('cyclic key sharing'); seen.add(next); next = (next === 'assistant' ? value.assistant : value.employees.find(e => e.id === next))?.keyFrom; }
+  }
   if (value.security !== undefined) { object(value.security); if (value.security.approveWrites !== undefined) choice(value.security.approveWrites, [true, false]); if (value.security.monthlyTokenLimit !== undefined) number(value.security.monthlyTokenLimit, 0, 1e12); }
   if (value.settings !== undefined) { object(value.settings); for (const [k, v] of Object.entries(value.settings)) { if (typeof v === 'number') number(v, -1000, 10000); else if (typeof v === 'string') text(v, 100); else if (typeof v !== 'boolean' && v !== null) fail('invalid display setting'); } if (value.settings.quality !== undefined) choice(value.settings.quality, ['low', 'balanced', 'high', 'ultra']); if (value.settings.timeMode !== undefined) choice(value.settings.timeMode, ['real', 'preview']); if (value.settings.timeZone && value.settings.timeZone !== 'auto') { try { new Intl.DateTimeFormat('en', { timeZone: value.settings.timeZone }); } catch { fail('invalid timezone'); } } }
   return value;
 }
 const NO_ARGS = new Set(['app:info', 'config:get', 'config:reset', 'data:erase', 'workspace:choose', 'workspace:ignore-map', 'workspace:open', 'tasks:snapshot', 'tasks:clear', 'team:updates', 'usage:get', 'audit:export', 'app:quit']);
 function validateIPC(channel, args) {
+  if (channel === 'meeting:cancel') { if (args.length) fail('unexpected arguments'); return; }
+  if (channel === 'workspace:editor-read') { if (args.length !== 1) fail('unexpected arguments'); text(args[0], 2048, false); return; }
+  if (channel === 'workspace:editor-list') { if(args.length !== 2) fail('unexpected arguments');text(args[0],2048,false);number(args[1],0,1000000);if(!Number.isInteger(args[1]))fail('invalid page');return; }
+  if (channel === 'workspace:editor-save') { if (args.length !== 3) fail('unexpected arguments'); text(args[0], 2048, false); text(args[1], 1000000); if (args[2] !== null && !/^[a-f0-9]{64}$/.test(args[2])) fail('invalid file version'); return; }
   if(channel==='diagnostics:export'){if(args.length)fail('unexpected arguments');return;}
   if(channel==='group:list'){if(args.length)fail('unexpected arguments');return;}
   if(channel.startsWith('group:')){
-    const counts={'group:start':3,'group:get':1,'group:send':3,'group:cancel':1,'group:end':1,'group:decision':2};
+    const counts={'group:start':3,'group:get':1,'group:send':3,'group:cancel':1,'group:end':1,'group:decision':2,'group:delete':1};
     if(!(channel in counts)||args.length!==counts[channel])fail('unexpected arguments');
     const [a,b,c]=args;
     const participants=value=>{if(!Array.isArray(value)||value.length>50||new Set(value).size!==value.length)fail('invalid participants');value.forEach(id);};
@@ -62,7 +70,7 @@ function validateIPC(channel, args) {
     else{id(a);if(channel==='group:send'){text(b,5000);participants(c);}if(channel==='group:decision')text(b,700,false);}
     return;
   }
-  if (NO_ARGS.has(channel)) { if (args.length) fail('unexpected arguments'); return; }
+  if (NO_ARGS.has(channel) || ['updates:status', 'updates:check', 'updates:install'].includes(channel)) { if (args.length) fail('unexpected arguments'); return; }
   const arity = { 'config:save': 1, 'secret:set': 3, 'provider:test': 2, 'workspace:list': 2, 'workspace:read': 1, 'workspace:write': 2, 'terminal:run': 1, 'tasks:create': 2, 'tasks:resume': 1, 'tasks:cancel': 1, 'tasks:reviewed': 1, 'approval:respond': 2, 'memory:list': 1, 'memory:add': 4, 'memory:delete': 1, 'memory:update': 3, 'audit:list': 1, 'employee:reply': 3, 'meeting:ideas': 2, 'assistant:chat': 2, 'shell:external': 1, 'app:fullscreen': 1 };
   if (!(channel in arity) || args.length > arity[channel]) fail('unexpected arguments');
   const [a, b, c, d] = args;

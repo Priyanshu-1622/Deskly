@@ -47,7 +47,7 @@ test('employees leave in stages while active tasks and overtime keep them presen
   const office = Object.create(agentsWindow.DesklyAgents.Office.prototype);
   office.employees = [first, second]; office.arrivals = [];
   office.shift = { dateKey: '2026-09-30', overtime: [], recalled: [], sentHome: [] };
-  office.ctx = { clockInfo: { dateKey: '2026-09-30', workday: true, hour: 18, minute: 0 },
+  office.ctx = { data: require('../src/renderer/assets/world.json'), clockInfo: { dateKey: '2026-09-30', workday: true, hour: 18, minute: 0 },
     runtime: { activeFor: id => active.has(id) ? { status: 'running' } : null }, life: saved };
   office.syncShift();
   assert.equal(first.errand, 'leaving');

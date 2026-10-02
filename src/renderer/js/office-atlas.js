@@ -1,26 +1,21 @@
 /* High resolution floor plan, destination directory and persistent walking guidance. */
 (function(){
-  const rooms=[
-    ['CEO office',0,24.8,10,36,'CEO_Office'],['Boardroom',10,28,18,36,'Boardroom'],
-    ['Meeting 1',18,28,22,36,'Meeting_1'],['Meeting 2',22,28,26,36,'Meeting_2'],['Meeting 3',26,28,30,36,'Meeting_3'],
-    ['HR office',30,28,36,36,'HR_Office'],['Finance office',36,28,42,36,'Finance_Office'],['Server room',42,28,45,36,'Server_Room'],['Research lab',45,28,56,36,'RnD_Lab'],['Fire exit',56,28,60,36,'Fire_Stair'],
-    ['Kitchen',0,0,9,8,'Kitchen'],['Reception',13,0,27,8,'Reception'],['Washrooms',33,0,40,8,'Washrooms'],['Training',40,0,49,8,'Training_Room'],['Wellness',49,0,52.5,8,'Wellness_Room'],['First aid',52.5,0,55.5,8,'First_Aid'],['Mailroom',55.5,0,60,8,'Mail_Room'],
-    ['Engineering',0,9.6,16.5,24.8,'Dept_Engineering'],['Design',16.5,17.6,24.5,26.4,'Dept_Design'],['Marketing',24.5,17.6,33,26.4,'Dept_Marketing'],['Human resources',33,17.6,40,26.4,'Dept_HR'],['Finance team',40,17.6,46,26.4,'Dept_Finance'],['Research',46,17.6,60,26.4,'Dept_Research'],
-    ['Café',16.5,9.6,30,16.6,'Cafe_Breakout'],['Sales',30,9.6,42,16.6,'Dept_Sales'],['IT helpdesk',42,9.6,47,16.6,'IT_Helpdesk'],['Support',47,9.6,60,16.6,'Dept_Support']];
+
 
   const make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;};
   const btn=(text,fn)=>{const b=make('button','map-action',text);b.type='button';b.onclick=fn;return b;};
   function install(app){
-    const ui=app.ui,base=document.createElement('canvas');base.width=1800;base.height=1440;const bg=base.getContext('2d');const world={x0:-4,z0:-12,w:68,h:54};const X=x=>(x-world.x0)/world.w*base.width,Y=z=>(42-z)/world.h*base.height;
-    bg.fillStyle='#182c32';bg.fillRect(0,0,base.width,base.height);bg.fillStyle='#294039';bg.fillRect(X(0),Y(0),X(60)-X(0),Y(-10)-Y(0));bg.fillStyle='#b2c2c0';bg.fillRect(X(0),Y(36),X(60)-X(0),Y(0)-Y(36));
+    const rooms=app.data.layout.rooms,[x0,z0,x1,z1]=app.data.bounds,mx=x=>(x-x0)/(x1-x0)*480,my=z=>(z1-z)/(z1-z0)*288;
+    const ui=app.ui,base=document.createElement('canvas');base.width=1800;base.height=1440;const bg=base.getContext('2d');const world={x0:x0-4,z0:z0-12,w:x1-x0+8,h:z1-z0+18};const X=x=>(x-world.x0)/world.w*base.width,Y=z=>(z1+6-z)/world.h*base.height;
+    bg.fillStyle='#182c32';bg.fillRect(0,0,base.width,base.height);bg.fillStyle='#294039';bg.fillRect(X(x0),Y(z0),X(x1)-X(x0),Y(-10)-Y(z0));bg.fillStyle='#b2c2c0';bg.fillRect(X(x0),Y(z1),X(x1)-X(x0),Y(z0)-Y(z1));
     rooms.forEach((r,i)=>{bg.fillStyle=i<10?'#e4e9e4':i<16?'#d3e2da':'#dbe4e8';bg.fillRect(X(r[1]),Y(r[4]),X(r[3])-X(r[1]),Y(r[2])-Y(r[4]));});
     // Use actual collision data, not approximate room rectangles, for walls and furniture.
-    const nav=app.nav.office||app.nav;bg.fillStyle='#71858c';for(let z=0;z<36;z+=.2)for(let x=0;x<60;x+=.2)if(app.nav.blockedAt(x,z,false))bg.fillRect(X(x),Y(z+.2),base.width/world.w*.205,base.height/world.h*.205);
-    bg.strokeStyle='#91aab1';bg.lineWidth=2;bg.strokeRect(X(0),Y(36),X(60)-X(0),Y(0)-Y(36));
+    const nav=app.nav.office||app.nav;bg.fillStyle='#71858c';for(let z=z0;z<z1;z+=.2)for(let x=x0;x<x1;x+=.2)if(app.nav.blockedAt(x,z,false))bg.fillRect(X(x),Y(z+.2),base.width/world.w*.205,base.height/world.h*.205);
+    bg.strokeStyle='#91aab1';bg.lineWidth=2;bg.strokeRect(X(x0),Y(z1),X(x1)-X(x0),Y(z0)-Y(z1));
     let destination=null,path=[],routeT=0;
     const hud=make('div','route-hud');hud.hidden=true;document.querySelector('#hud').append(hud);
     const guide=()=>{if(!destination)return;routeT-=.33;const p=app.player.pos;if(routeT<=0){routeT=2;path=app.nav.path(p,destination.point())||[];}while(path.length&&Math.hypot(path[0].x-p.x,path[0].z-p.z)<.55)path.shift();let distance=0,previous=p;for(const n of path){distance+=Math.hypot(n.x-previous.x,n.z-previous.z);previous=n;}const direct=Math.hypot(destination.point().x-p.x,destination.point().z-p.z);hud.textContent=direct<1.2?'Arrived · '+destination.name:destination.name+' · '+Math.round(distance||direct)+' m · G map · Backspace clear';hud.hidden=!!ui.panelKind;};
-    ui.minimap=function(player,employees){const g=ui.mm;g.drawImage(base,X(0),Y(36),X(60)-X(0),Y(0)-Y(36),0,0,480,288);for(const e of employees){if(!e.present)continue;g.fillStyle='#367493';g.beginPath();g.arc(e.pos.x*8,(36-e.pos.z)*8,4,0,7);g.fill();}g.fillStyle='#ffffff';g.strokeStyle='#286f87';g.lineWidth=2;g.beginPath();g.arc(player.pos.x*8,(36-player.pos.z)*8,5,0,7);g.fill();g.stroke();if(destination){const g=ui.mm;g.strokeStyle='#ffcd6d';g.lineWidth=2;g.beginPath();g.moveTo(app.player.pos.x*8,(36-app.player.pos.z)*8);for(const p of path)g.lineTo(p.x*8,(36-p.z)*8);g.stroke();guide();}else hud.hidden=true;};
+    ui.minimap=function(player,employees){const g=ui.mm;g.drawImage(base,X(x0),Y(z1),X(x1)-X(x0),Y(z0)-Y(z1),0,0,480,288);for(const e of employees){if(!e.present)continue;g.fillStyle='#367493';g.beginPath();g.arc(mx(e.pos.x),my(e.pos.z),4,0,7);g.fill();}g.fillStyle='#ffffff';g.strokeStyle='#286f87';g.lineWidth=2;g.beginPath();g.arc(mx(player.pos.x),my(player.pos.z),5,0,7);g.fill();g.stroke();if(destination){const g=ui.mm;g.strokeStyle='#ffcd6d';g.lineWidth=2;g.beginPath();g.moveTo(mx(app.player.pos.x),my(app.player.pos.z));for(const p of path)g.lineTo(mx(p.x),my(p.z));g.stroke();guide();}else hud.hidden=true;};
     ui.openMap=function(){
       const body=make('div','atlas'),side=make('aside','atlas-side'),heading=make('div','atlas-heading'),title=make('h2',null,'Find your way'),search=make('input','atlas-search'),filters=make('div','atlas-filters'),list=make('div','atlas-list'),detail=make('div','atlas-detail');search.placeholder='Search rooms, people, coffee…';search.setAttribute('aria-label','Search destinations');heading.append(make('small',null,'DESKLY / OFFICE DIRECTORY'),title);side.append(heading,search,filters,list,detail);
       const right=make('div','atlas-right'),tools=make('div','atlas-toolbar'),viewport=make('div','atlas-view'),canvas=make('canvas'),legend=make('div','atlas-legend');viewport.append(canvas);right.append(tools,viewport,legend);body.append(side,right);let filter='All',zoom=1,pan={x:0,y:0},selected=destination,previewPath=path,showPeople=true,showFacilities=true,metrics;

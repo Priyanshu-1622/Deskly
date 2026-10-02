@@ -13,7 +13,7 @@ if ((process.env.DESKLY_NATIVE_CHECK === '1' || process.env.DESKLY_REDESIGN_CHEC
   fs.writeFileSync(path.join(profile, 'deskly-config.json'), JSON.stringify({ founder: 'Smoke', company: 'Deskly QA', workspace: project, employees: [{ id: 'qa', name: 'QA', role: 'Developer', provider: 'openai' }], assistant: { provider: 'demo' }, security: { approveWrites: true }, settings: { quality: 'low' } }));
 }
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
-const electron = spawn(process.env.DESKLY_SMOKE_EXECUTABLE ? path.resolve(root, process.env.DESKLY_SMOKE_EXECUTABLE) : require('electron'), [root, ...(process.env.DESKLY_README_SHOTS==='1'?[]:['--deskly-visual-check']), `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`], { cwd: root, env, windowsHide: true, stdio: 'ignore' });
+const electron = spawn(process.env.DESKLY_SMOKE_EXECUTABLE ? path.resolve(root, process.env.DESKLY_SMOKE_EXECUTABLE) : require('electron'), [root, ...((process.env.DESKLY_README_SHOTS==='1'||process.env.DESKLY_UPDATER_CHECK==='1')?[]:['--deskly-visual-check']), `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`], { cwd: root, env, windowsHide: true, stdio: 'ignore' });
 const pending = new Map(), errors = []; let id = 0, socket;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function send(method, params = {}) {
@@ -49,6 +49,48 @@ async function main() {
   for (let tries = 0; tries < 70; tries++) { if (await evaluate('!!window.__deskly?.world?.data && !!window.__deskly?.player')) break; await delay(300); }
   const ready = await evaluate('!!window.__deskly?.world?.data && !!window.__deskly?.player');
   if (!ready) throw new Error('Office failed to initialize');
+  if (process.env.DESKLY_UPDATER_CHECK === '1') {
+    const state = await evaluate('(async()=>{const s=await DK.updatesCheck();if(s.status!=="current")throw Error("Published update feed did not resolve: "+JSON.stringify(s));return s;})()');
+    console.log(JSON.stringify({publishedUpdateFeed:state,errors},null,2));if(errors.length)throw Error('Update check renderer errors');return;
+  }
+  if (process.env.DESKLY_MENU_CHECK === '1') {
+    const result = await evaluate(`(async()=>{
+      const a=window.__deskly;a.screens.start();
+      // Hidden smoke windows still exercise the visible scene's render policy.
+      const visibility=Object.getOwnPropertyDescriptor(document,'hidden');
+      Object.defineProperty(document,'hidden',{configurable:true,value:false});
+      const render=a.renderer.render;let draws=0,frames=0;
+      a.renderer.render=function(...args){draws++;return render.apply(this,args);};
+      try{
+        await new Promise(resolve=>{const sample=()=>{if(++frames===24)resolve();else requestAnimationFrame(sample);};requestAnimationFrame(sample);});
+        if(draws<frames-1)throw Error('Animated menu skipped frames: '+draws+'/'+frames);
+        return{animationFrames:frames,sceneRenders:draws,continuousRendering:true};
+      }finally{
+        a.renderer.render=render;
+        if(visibility)Object.defineProperty(document,'hidden',visibility);else delete document.hidden;
+      }
+    })()`);
+    console.log(JSON.stringify({menuRendering:result}));
+  }
+  if (process.env.DESKLY_SCROLL_CHECK === '1') {
+    await evaluate(`(()=>{const a=window.__deskly;a.screens.cfg={company:'Scroll check',founder:'Founder',employees:DesklyPresets.defaultTeam(),settings:{quality:'low'},security:{},assistant:{provider:'demo'}};a.enterOffice();a.ui.openBoard('team');window.scrollRow=document.querySelector('.team-item');const body=document.querySelector('#panel .body');body.scrollTop=180;window.scrollBefore=body.scrollTop;})()`);
+    await delay(250);
+    const before=await evaluate(`(()=>{const b=document.querySelector('#panel .body'),r=b.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+80};})()`);
+    await send('Input.dispatchMouseEvent',{type:'mouseWheel',x:before.x,y:before.y,deltaX:0,deltaY:120});
+    await delay(350);
+    const result=await evaluate(`(()=>{const a=window.__deskly,b=document.querySelector('#panel .body'),position=b.scrollTop;a.office.employees[0].activity='Checking a task';a.ui.panelScrollUntil=0;a.ui.tick();if(document.querySelector('.team-item')!==scrollRow)throw Error('Team cards rebuilt during update');if(b.scrollTop!==position)throw Error('Team update reset scroll');if(position<=scrollBefore)throw Error('Mouse wheel did not scroll team');if(a.player.enabled)throw Error('Player moved behind open panel');const style=getComputedStyle(b);a.ui.close();if(!a.player.enabled)throw Error('Closing panel did not restore movement');return{wheelScroll:true,stableCards:true,stablePosition:true,controlsRestored:true,scrollbarColor:style.scrollbarColor};})()`);
+    console.log(JSON.stringify({panelScrolling:result}));
+  }
+  if (process.env.DESKLY_AUDIT_CHECK === '1') {
+    await evaluate(`(()=>{const a=window.__deskly, update=a.world.update.bind(a.world); let injected=false; a.world.update=(...args)=>{if(!injected){injected=true;throw Error('Deskly audit injected frame failure');}a.auditRecoveredFrames=(a.auditRecoveredFrames||0)+1;return update(...args);};})()`);
+    let recovery;
+    for(let tries=0;tries<20;tries++){await delay(300);recovery=await evaluate('({faults:window.__deskly.frameFaults,frames:window.__deskly.auditRecoveredFrames||0,fatal:!!window.__deskly.sceneFault})');if(recovery.frames>=2)break;}
+    if(recovery.faults!==1||!Number.isFinite(recovery.frames)||recovery.frames<2||recovery.fatal)throw Error('A single failed frame did not recover: '+JSON.stringify(recovery));
+    for(let i=errors.length-1;i>=0;i--)if(errors[i].includes('Office frame failed')&&errors[i].includes('Deskly audit injected frame failure'))errors.splice(i,1);
+    console.log(JSON.stringify({frameRecovery:recovery}));
+    const details=await evaluate(`(()=>DesklyHumanAssets.models().map(entry=>{const rig=DesklyHumanAssets.build({assetId:entry.id}),count=()=>{let total=0;rig.root.traverse(mesh=>{if(mesh.isMesh&&mesh.visible)total+=(mesh.geometry.index?.count||mesh.geometry.attributes.position.count)/3;});return total;};const near=count();rig.setDetail(15);const medium=count();rig.setDetail(30);const far=count();rig.dispose();if(!(near>medium&&medium>far))throw Error('Character detail did not decrease with distance');return{id:entry.id,near,medium,far};}))()`);
+    console.log(JSON.stringify({characterDetails:details}));
+  }
   if(process.env.DESKLY_RELEASE_PREP_CHECK==='1'){
     const report=await evaluate(`(async()=>{
       const a=window.__deskly,c=(await DK.configGet()).config;c.employees=DesklyPresets.defaultTeam().slice(0,2).map(e=>({...e,provider:'demo'}));await DK.configSave(c);a.screens.cfg=c;a.enterOffice();
@@ -221,10 +263,10 @@ async function main() {
   await evaluate(`(() => {
     const app = window.__deskly;
     const render = app.renderer.render.bind(app.renderer);
-    window.checkRender=render;
+    window.checkRender=(scene,camera)=>{app.campus.treeT=0;app.campus.update(0);render(scene,camera);};
     app.renderer.render = (scene, camera) => {
       camera.position.set(7.6, 1.65, 34.75); camera.lookAt(4.8, .85, 33.45);
-      app.world.setShadowFocus(camera.position); render(scene, camera);
+      app.world.setShadowFocus(camera.position); window.checkRender(scene, camera);
     };
     app.refreshClock = () => { const info = DesklyOfficeTime.info(new Date('2026-10-01T06:30:00Z'), 'Asia/Kolkata'); app.world.setTime(info); return info; };
     for (const element of document.body.children) if (element.id !== 'stage' && element.tagName !== 'SCRIPT') element.style.display = 'none';

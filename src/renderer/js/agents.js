@@ -101,8 +101,9 @@
           case 'goto': {
             if (this.posture === 'sit') { this.standUp(); break; }
             if (!this.path) {
+              if (a.retryAt > a.t) break;
               this.path = this.ctx.nav.path(this.pos, a);
-              if(!this.path||!this.path.length){this.activity='Waiting for a clear route';if(a.t>12)this.done();break;}
+              if(!this.path||!this.path.length){this.activity='Waiting for a clear route'; a.retryAt = a.t + 1; if(a.t>12){ this.q = []; this.done(); }break;}
               this.pi = 0;
             }
             const tgt = this.path[this.pi];
@@ -112,8 +113,10 @@
             else {
               const nx=this.pos.x+dx/d*.6,nz=this.pos.z+dz/d*.6;
               const yielding=this.ctx.office.employees.some(other=>other!==this&&other.present&&other.posture!=='sit'&&Math.hypot(other.pos.x-nx,other.pos.z-nz)<.45&&Math.hypot(other.pos.x-this.pos.x,other.pos.z-this.pos.z)<.85&&this.ctx.office.employees.indexOf(other)<this.ctx.office.employees.indexOf(this));
-              if(yielding){mode='stand';break;}
+              const playerNear = this.ctx.playing && Math.hypot(this.ctx.player.pos.x-nx,this.ctx.player.pos.z-nz)<.55 && Math.hypot(this.ctx.player.pos.x-this.pos.x,this.ctx.player.pos.z-this.pos.z)<1;
+              if(yielding || playerNear){mode='stand';break;}
               const step = Math.min(d, sp * dt);
+              if (this.ctx.nav.doorBlocked?.(this.pos.x+dx/d*step, this.pos.z+dz/d*step)) { mode = 'stand'; break; }
               this.pos.x += dx / d * step; this.pos.z += dz / d * step;
               this.stepTravel = (this.stepTravel || 0) + step;
               if (this.stepTravel >= (a.run ? 0.72 : 0.88)) {
@@ -125,7 +128,7 @@
               this.yaw += angDiff(ty, this.yaw) * Math.min(1, dt * 8);
               mode = a.run ? 'run' : 'walk'; rig.speed = sp;
             }
-            if (a.t > 60) { this.done(); }
+            if (a.t > 60) { this.q = []; this.activity = 'Waiting for a clear route'; this.done(); }
             // live target (following the player)
             if (a.follow && a.t > 0.8) { const p = a.follow(); if (p && Math.hypot(p.x - a.x, p.z - a.z) > 1.2) { a.x = p.x; a.z = p.z; this.path = null; } }
             if (a.stopNear && a.stopNear()) this.done();
@@ -133,6 +136,7 @@
           }
           case 'sit': {
             const s = a.seat;
+            if (!s || Math.hypot(s.p[0]-this.pos.x, s.p[2]-this.pos.z) > 1.4) { this.q.unshift(a); this.cur = null; if(s)this.q.unshift({ type: 'goto', ...this.approach(s) }); break; }
             this.pos.x += (s.p[0] - this.pos.x) * Math.min(1, dt * 6); this.pos.z += (s.p[2] - this.pos.z) * Math.min(1, dt * 6);
             const ty = Math.atan2(s.f[0], s.f[1]);
             this.yaw += angDiff(ty, this.yaw) * Math.min(1, dt * 7);
@@ -157,6 +161,7 @@
       // look at the player when they're close and in front
       const P = this.ctx.player.pos;
       const pd = Math.hypot(P.x - this.pos.x, P.z - this.pos.z);
+      rig.setDetail?.(pd);
       const pang = Math.abs(angDiff(Math.atan2(P.x - this.pos.x, P.z - this.pos.z), this.yaw));
       rig.look = (pd < 4.5 && pang < 1.9) || this.interacting ? { x: P.x, y: this.ctx.player.eyeY, z: P.z } : (this.lookAt || null);
       if (!this.greeted && pd < 3.2 && this.present && !this.meeting && time > 2) {
@@ -179,7 +184,7 @@
       const shadowNear=pd<20;if(this.shadowNear!==shadowNear){this.shadowNear=shadowNear;rig.root.traverse(m=>{if(m.isMesh)m.castShadow=shadowNear&&!/^Hair_|Eyeballs|Eyebrows/.test(m.name);});}
       this.animationT=(this.animationT||0)+dt;
       const f=this.ctx.player.forward(),inView=((this.pos.x-P.x)*f.x+(this.pos.z-P.z)*f.z)>-2;
-      const interval=pd<5?1/30:inView&&pd<18?1/20:inView&&pd<35?1/10:1/4;
+      const interval=pd<5?0:inView&&pd<18?1/20:inView&&pd<35?1/10:1/4;
       if(this.animationT>=interval){rig.update(this.animationT,this.yaw);this.animationT=0;}
       const task = this.taskInfo();
       this.statusT=(this.statusT||0)-dt;if(this.statusT<=0){drawStatus(this.sprite,this.state,task?task.progress:0,time);this.statusT=.2;}
@@ -188,7 +193,12 @@
       if (this.bubble && this.bubble.until < time) this.bubble = null;
       // workstation screen
       this.screenT -= dt;
-      if (this.screen && this.screenT <= 0) { this.screenT = 0.5; this.ctx.office.drawScreen(this); }
+      if (this.screen && this.screenT <= 0) {
+        this.screenT = 0.5;
+        const screen = this.screen, desired = pd < 3 ? 512 : pd > 5 ? 256 : screen.canvas.width;
+        if (screen.canvas.width !== desired) { const ratio = screen.canvas.height / screen.canvas.width; screen.canvas.width = desired; screen.canvas.height = Math.round(desired * ratio); screen.tex.dispose(); screen.tex = new T.CanvasTexture(screen.canvas); screen.tex.encoding = T.sRGBEncoding; screen.plane.material.map = screen.tex; screen.plane.material.needsUpdate = true; }
+        this.ctx.office.drawScreen(this);
+      }
     }
     done() { this.cur = null; this.path = null; }
     standUp() {
@@ -283,8 +293,7 @@
     assignSeats() {
       const used = new Set();
       const byRoom = r => this.chairs.filter(c => c.room === r);
-      const anchors = { Dept_Engineering: [8, 16.5], Dept_Design: [20.5, 17.6], Dept_Marketing: [28.5, 17.6], Dept_Research: [52, 17.6], Dept_Finance: [43, 17.6],
-        Dept_Sales: [36, 16.6], Dept_Support: [53, 16.6], Dept_HR: [36.5, 17.6], IT_Helpdesk: [44, 14], Reception: [19, 6.3] };
+      const anchors = this.ctx.data.layout.seatAnchors;
       const counts = {};
       for (const e of this.employees) {
         let cands = byRoom(e.room).filter(c => (c.desk || e.room === 'Reception' || e.room === 'IT_Helpdesk') && !used.has(c));
@@ -314,18 +323,10 @@
       return c.length ? pick(c) : null;
     }
     chatLines(e) {
-      return ({
-        Engineering: ['Did the build go green?', 'I refactored that module — much cleaner.', 'Pair on this later?', 'Tests are flaky again.'],
-        Design: ['What do you think of this layout?', 'The new icons are in Figma.', 'Users loved the prototype.'],
-        Marketing: ['The newsletter open rate jumped!', 'Need a headline — any ideas?', 'Launch post is almost ready.'],
-        Research: ['Found a great paper on this.', 'The survey results are interesting.', 'Sample size is still small.'],
-        Finance: ['Numbers look healthy this week.', 'Churn dipped a bit.', 'Forecast is updated.'],
-        Sales: ['Just booked a demo!', 'That pilot looks promising.', 'Pipeline is growing.'],
-        Support: ['Queue is under control.', 'Customer sent a lovely note.', 'Found the root cause of that bug.'],
-        HR: ['Two new hires start Monday.', 'Offsite plans are coming together.'],
-        IT: ['Remember to update your laptop.', 'Rotated the Wi-Fi password.'],
-        Reception: ['Visitors at 2pm today.', 'Coffee beans restocked!']
-      })[e.dept] || ['How is it going?'];
+      const task = this.ctx.runtime.latestFor(e.id);
+      if (task) return [`My latest task: ${task.title}. Check the task board for its actual status.`];
+      return ['Coffee break?', 'How is your day going?', 'Nice to see you around the office.'];
+
     }
 
     /* ---------------- morning arrival ---------------- */
@@ -354,23 +355,23 @@
       const W = this.ctx.world;
       for (const a of this.arrivals) {
         if (a.done || time < a.at) continue;
-        if(a.recall && this.employees.some(e=>e.present&&Math.hypot(e.pos.x-20,e.pos.z+7.4)<.85))continue;
+        if(a.recall && this.employees.some(e=>e.present&&Math.hypot(e.pos.x-this.ctx.data.layout.arrival.x,e.pos.z-this.ctx.data.layout.arrival.z)<.85))continue;
         a.done = true;
         const e = a.e;
         if(e.present)continue;
         if (!this.onShift(e) && !this.shouldStay(e)) continue;
-        if(a.recall&&e.meeting){e.posture='stand';e.sitSeat=null;e.spawnAt(20,-7.4,0);e.say('Coming to the meeting.',2);continue;}
+        if(a.recall&&e.meeting){e.posture='stand';e.sitSeat=null;e.spawnAt(this.ctx.data.layout.arrival.x,this.ctx.data.layout.arrival.z,0);e.say('Coming to the meeting.',2);continue;}
         e.clear();e.errand=null;e.posture='stand';e.sitSeat=null;e.greeted=false;
-        if(a.recall){e.spawnAt(20,-7.4,0);e.push({type:'goto',x:20,z:2.6});e.goDesk();e.say('Back to the office.',2);continue;}
+        if(a.recall){e.spawnAt(this.ctx.data.layout.arrival.x,this.ctx.data.layout.arrival.z,0);e.push({type:'goto',...this.ctx.data.layout.entry});e.goDesk();e.say('Back to the office.',2);continue;}
         if (a.via === 'lift') {
           const L = W.lifts[Math.random() < 0.5 ? 0 : 1];
           const x = (L.x0 + L.x1) / 2;
           e.spawnAt(x, 1.3, 0);
-          L.want = 1; setTimeout(() => { L.want = 0; }, 5000);
+          L.want = 1; clearTimeout(L.closeTimer); L.closeTimer = setTimeout(() => { L.want = 0; }, 5000);
           e.push({ type: 'wait', dur: 1.2 }, { type: 'goto', x, z: 3.6 });
         } else {
-          e.spawnAt(20 + rnd(-1.2, 1.2), -7.5, 0);
-          e.push({ type: 'goto', x: 20 + rnd(-0.6, 0.6), z: 2.5 });
+          e.spawnAt(this.ctx.data.layout.arrival.x + rnd(-1.2, 1.2), this.ctx.data.layout.arrival.z, 0);
+          e.push({ type: 'goto', x: this.ctx.data.layout.entry.x + rnd(-0.6, 0.6), z: this.ctx.data.layout.entry.z });
         }
         // greet reception, maybe coffee, then desk
         const zara = this.employees.find(z => z.dept === 'Reception' && z !== e);
@@ -380,7 +381,7 @@
       }
     }
 
-    shiftMinutes(e) { return this.employees.indexOf(e) * 3; }
+    shiftMinutes(e) { return Math.max(0, this.employees.indexOf(e)) * Math.min(3, 20 / Math.max(1, this.employees.length - 1)); }
     onShift(e) {
       const t = this.ctx.clockInfo.hour * 60 + this.ctx.clockInfo.minute;
       const stagger = this.shiftMinutes(e);
@@ -426,7 +427,7 @@
       e.clear(); e.errand = 'leaving'; e.activity = 'Heading home';
       if (immediate) { e.present = false; e.rig.root.visible = false; e.errand = null; e.activity = 'At home'; return true; }
       e.say(['Heading home. See you tomorrow!', 'That’s me done for today.', 'Good night!'][this.employees.indexOf(e) % 3], 3);
-      e.push({ type: 'stand' }, { type: 'goto', x: 20, z: -7.4 }, { type: 'call', fn: () => { e.rig.cup.visible = false; e.rig.phone.visible = false; e.activity = 'At home'; e.errand = null; } }, { type: 'hide' });
+      e.push({ type: 'stand' }, { type: 'goto', ...this.ctx.data.layout.arrival }, { type: 'call', fn: () => { e.rig.cup.visible = false; e.rig.phone.visible = false; e.activity = 'At home'; e.errand = null; } }, { type: 'hide' });
       return true;
     }
     release(e) {
@@ -450,8 +451,11 @@
     }
 
     /* ---------------- task state -> world ---------------- */
+    dispose() { this.disposed = true; (this.unsubscribers || []).forEach(fn => fn()); for (const e of this.employees) { clearTimeout(e.approvalTimer); e.followVersion = (e.followVersion || 0) + 1; } }
     bindRuntime(bus, runtime) {
-      bus.on('task.status_changed', ev => {
+      this.unsubscribers = [];
+      const subscribe = (type, fn) => this.unsubscribers.push(bus.on(type, fn));
+      subscribe('task.status_changed', ev => {
         const e = this.byId(ev.employeeId); if (!e) return;
         const st = TASK_TO_STATE[ev.status];
         if (st && !e.present && !this.shift.sentHome.includes(e.id)) this.recall(e, false);
@@ -460,16 +464,17 @@
         if (ev.status === 'running' && e.approvalWalk) { e.approvalWalk = false; if (!e.meeting) { e.clear(); e.say('Thanks — back to it.', 2.5); e.goDesk(); } }
         if (ev.status === 'planning' && !e.meeting && !e.interacting) { e.clear(); e.goDesk(); }
       });
-      bus.on('approval.required', ev => {
+      subscribe('approval.required', ev => {
         const e = this.byId(ev.employeeId); if (!e) return;
         e.say('I need your approval before I continue.', 4);
-        e.approvalTimer = setTimeout(() => this.walkToPlayer(e, 'approval'), 7000);
+        clearTimeout(e.approvalTimer); e.approvalTimer = setTimeout(() => this.walkToPlayer(e, 'approval'), 7000);
       });
-      bus.on('approval.responded', ev => { const e = this.byId(ev.employeeId); if (e) clearTimeout(e.approvalTimer); });
-      bus.on('task.completed', ev => {
+      subscribe('approval.responded', ev => { const e = this.byId(ev.employeeId); if (e) clearTimeout(e.approvalTimer); });
+      subscribe('approval.resolved', ev => { const e = this.byId(ev.employeeId); if (e) clearTimeout(e.approvalTimer); });
+      subscribe('task.completed', ev => {
         const e = this.byId(ev.employeeId); if (!e) return;
         e.say('Done! The result is ready for your review.', 4);
-        setTimeout(() => { if (e.state === 'COMPLETED') this.walkToPlayer(e, 'result'); }, 4500);
+        setTimeout(() => { if (!this.disposed && e.state === 'COMPLETED') this.walkToPlayer(e, 'result'); }, 4500);
       });
     }
     byId(id) { return this.employees.find(e => e.id === id); }
@@ -490,18 +495,20 @@
     /* ---------------- orders ---------------- */
     order(e, what) {
       const P = this.ctx.player;
+      e.followVersion = (e.followVersion || 0) + 1;
       e.clear(); e.interacting = false;
-      if (what === 'desk') { e.errand = null; e.meeting = null; e.goDesk(); e.say('Heading back to my desk.', 2.5); }
+      if (what === 'desk') { if(e.meeting)e.meeting.people = e.meeting.people.filter(person => person !== e); e.errand = null; e.meeting = null; e.goDesk(); e.say('Heading back to my desk.', 2.5); }
       if (what === 'follow') {
         e.errand = 'follow'; e.say('Right behind you.', 2.2); e.activity = 'Following you';
+        const version = e.followVersion;
         const loop = () => {
-          if (e.errand !== 'follow') return;
+          if (this.disposed || e.errand !== 'follow' || version !== e.followVersion) return;
           const p = P.pos;
           if (Math.hypot(p.x - e.pos.x, p.z - e.pos.z) > 2.2) e.clear(), e.push({ type: 'goto', x: p.x, z: p.z, follow: () => P.pos, stopNear: () => Math.hypot(P.pos.x - e.pos.x, P.pos.z - e.pos.z) < 1.8 });
           setTimeout(loop, 700);
         };
         loop();
-        setTimeout(() => { if (e.errand === 'follow') { e.errand = null; e.say('I\'ll head back to work.', 2.5); e.clear(); e.goDesk(); } }, 90000);
+        setTimeout(() => { if (version === e.followVersion && e.errand === 'follow') { e.errand = null; e.say('I\'ll head back to work.', 2.5); e.clear(); e.goDesk(); } }, 90000);
       }
       if (what === 'coffee') {
         e.errand = 'coffee'; e.say(pick(['Coming right up!', 'Sure — how do you take it?', 'One coffee, on it.']), 2.5);
@@ -551,7 +558,7 @@
       const occupiedByPlayer = this.ctx.player?.seated && this.ctx.player.seat?.room === room ? this.ctx.player.seat : null;
       const playerSeat = room === 'CEO_Office' ? this.chairs.find(c => c.room === room && c.exec) : occupiedByPlayer || chairs[0];
       if (room !== 'CEO_Office' && playerSeat) chairs.splice(chairs.indexOf(playerSeat), 1);
-      const C = { CEO_Office: [3.3, 27.3], Boardroom: [14, 32.2], Meeting_1: [20, 32.2], Meeting_2: [24, 32.2], Meeting_3: [28, 32.2] }[room] || [chairs[0]?.p[0] || 14, chairs[0]?.p[2] || 32];
+      const C = (this.ctx.data?.layout.meetingCenters || {})[room] || [chairs[0]?.p[0] || 14, chairs[0]?.p[2] || 32];
       const m = { room, topic, people: [], playerSeat, phase: 'gathering', speaking: null, t0: this.ctx.time, lines: [] };
       people.forEach((e, i) => {
         e.clear(); e.errand = null; e.interacting = false; e.meeting = m; m.people.push(e);
@@ -593,11 +600,12 @@
     }
     async runBrainstorm(topic, provider, onLine, signal) {
       const m = this.meeting; if (!m) return;
-      m.phase = 'brainstorm';
+      m.phase = 'brainstorm'; m.brainstormCancelled = false;
       m.people.forEach(e => e.say('Hmm…', 3));
       const people = m.people.map(e => { const t = this.ctx.runtime.activeFor(e.id); return { id: e.id, name: e.name, role: e.role, status: t ? `working on "${t.title}"` : 'available' }; });
       const lines = await provider.meeting(topic, people, signal);
       for (const l of (Array.isArray(lines) ? lines : [])) {
+        if (m.brainstormCancelled || this.meeting !== m) break;
         const e = m.people.find(p => p.id === l.id); if (!e || this.meeting !== m) continue;
         m.speaking = e; e.say(String(l.line), 7); onLine?.(e, String(l.line));
         await new Promise(r => setTimeout(r, 6500));
@@ -615,7 +623,8 @@
 
     /* ---------------- workstation screen ---------------- */
     drawScreen(e) {
-      const s = e.screen, g = s.ctx, W = s.canvas.width, H = s.canvas.height;
+      const s = e.screen, g = s.ctx, scale = s.canvas.width / 256, W = 256, H = s.canvas.height / scale;
+      g.save(); g.scale(scale, scale);
       const t = e.taskInfo();
       const st = e.present ? e.state : 'IDLE';
       g.fillStyle = '#0d1117'; g.fillRect(0, 0, W, H);
@@ -639,7 +648,7 @@
         g.fillStyle = '#21262d'; g.fillRect(8, H - 12, W - 16, 5);
         g.fillStyle = S.color; g.fillRect(8, H - 12, (W - 16) * (t.progress || 0), 5);
       }
-      s.tex.needsUpdate = true;
+      g.restore(); s.tex.needsUpdate = true;
     }
   }
 

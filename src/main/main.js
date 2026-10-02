@@ -4,18 +4,20 @@ const { pathToFileURL } = require('url');
 const fs = require('fs');
 const path = require('path');
 const { Store } = require('./store');
-const { Runtime } = require('./runtime/runtime');
-const { PROVIDERS, testProfile, endpointFor, bindTestProfile } = require('./runtime/providers');
+const { Runtime, ACTIVE } = require('./runtime/runtime');
+const { Updates } = require('./updates');
+const { PROVIDERS, testProfile, bindTestProfile } = require('./runtime/providers');
 const { Workspace } = require('./runtime/workspace');
 const { validateIPC, workspacePath } = require('./ipc-validation');
 const { diagnostics } = require('./diagnostics');
+const { sharedKey } = require('./runtime/key-sharing');
 
 const DEV = process.argv.includes('--dev');
 const RENDERER = path.join(__dirname, '..', 'renderer');
 const APP_URL = 'app://deskly/index.html';
 // Serve the renderer from app://deskly/ so fetch() works and the CSP is 'self'.
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
-let win = null, store = null, runtime = null, selectedWorkspace = null, quitting = false, rendererCrashes = [];
+let win = null, store = null, runtime = null, updates = null, selectedWorkspace = null, quitting = false, rendererCrashes = [];
 const operations = new Map();
 function operation(fn) {
   if (quitting) throw new Error('Deskly is shutting down.');
@@ -37,9 +39,7 @@ function chosenProject(value) {
 function profileFor(id) {
   const cfg = store.getConfig() || {};
   const src = id === 'assistant' ? (cfg.assistant || {}) : (cfg.employees || []).find(e => e.id === id) || {};
-  const selected = { ...src, provider: src.provider || 'demo' };
-  let key = store.getSecret(id, selected);
-  if (!key && src.keyFrom) { const owner = savedProfile(src.keyFrom); if (owner && owner.provider === src.provider && endpointFor(owner) === endpointFor(src)) key = store.getSecret(src.keyFrom, owner); }
+  const key = sharedKey(cfg, id, (owner, profile) => store.getSecret(owner, profile));
   return { provider: src.provider || 'demo', model: src.model || '', lightweightModel: src.lightweightModel || '', baseUrl: src.baseUrl || '', apiKey: key || '' };
 }
 
@@ -58,7 +58,11 @@ function createWindow() {
   win.webContents.on('render-process-gone', (_event, details) => {
     if (quitting) return;
     rendererCrashes = rendererCrashes.filter(t => Date.now() - t < 60000); rendererCrashes.push(Date.now());
-    if (rendererCrashes.length <= 2) { win.reload(); return; }
+    if (rendererCrashes.length <= 2) {
+      const cfg = store.getConfig();
+      if (cfg) store.saveConfig({ ...cfg, settings: { ...cfg.settings, quality: 'low', shadows: false } });
+      if (win && !win.isDestroyed()) win.reload(); return;
+    }
     dialog.showErrorBox('Deskly graphics stopped', `The office renderer stopped repeatedly (${details.reason}). Your project work is still in the main process. Restart Deskly and choose a lower graphics quality.`);
   });
   if (DEV) win.webContents.openDevTools({ mode: 'detach' });
@@ -67,7 +71,7 @@ function createWindow() {
 function menu() {
   const tpl = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-    { label: 'Deskly', submenu: [{ label: 'Toggle full screen', accelerator: 'F11', click: () => win?.setFullScreen(!win.isFullScreen()) }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'Deskly', submenu: [{ label: 'Toggle full screen', accelerator: 'F11', click: () => { if (win && !win.isDestroyed()) win.setFullScreen(!win.isFullScreen()); } }, { type: 'separator' }, { role: 'quit' }] },
     { role: 'editMenu' },
     { label: 'View', submenu: [...(DEV ? [{ role: 'reload' }, { role: 'toggleDevTools', accelerator: 'F12' }] : []), { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }] }
   ];
@@ -81,14 +85,20 @@ function wireIPC() {
         throw new Error('Refused IPC from an untrusted frame.');
       }
       validateIPC(ch, a);
+      if (quitting && !['updates:status', 'app:info'].includes(ch)) throw Error('Deskly is shutting down.');
       return { ok: true, value: await fn(...a) };
     }
     catch (err) { return { ok: false, error: err.message || String(err), code: err.code }; }
   });
   h('app:info', () => ({ version: app.getVersion(), platform: process.platform, encryption: store.encryptionAvailable(), providers: PROVIDERS, dataDir: app.getPath('userData') }));
+  h('updates:status', () => updates.snapshot());
+  h('updates:check', () => updates.check());
+  h('updates:install', () => updates.install());
   h('config:get', () => { const config = store.getConfig(), keys = Object.fromEntries(Object.keys(store.hasSecrets()).filter(id => { try { const profile = savedProfile(id); return profile && store.getSecret(id, profile); } catch { return false; } }).map(id => [id, true])); return { config, keys, notices: store.notices }; });
   h('config:save', cfg => {
     if (cfg.workspace) {
+      const savedWorkspace = store.getConfig()?.workspace;
+      if (savedWorkspace && path.resolve(cfg.workspace) === path.resolve(savedWorkspace)) return store.saveConfig(cfg);
       const next = chosenProject(cfg.workspace), previous = store.getConfig()?.workspace;
       const norm = s => process.platform === 'win32' ? s.toLowerCase() : s;
       if (norm(next) !== norm(selectedWorkspace || '') && (!previous || norm(next) !== norm(chosenProject(previous)))) throw new Error('Choose the project folder with the native folder picker.');
@@ -96,7 +106,11 @@ function wireIPC() {
     } else if (store.getConfig()?.workspace) throw new Error('Choose a project folder before saving.');
     return store.saveConfig(cfg);
   });
-  h('config:reset', async () => { await runtime.shutdown(); store.reset(); app.relaunch(); app.quit(); return true; });
+  h('config:reset', async () => {
+    const result = await dialog.showMessageBox(win, { type: 'warning', title: 'Reset Deskly settings?', message: 'Reset your office settings and saved keys?', detail: 'Project files, tasks and memories remain.', buttons: ['Cancel', 'Reset settings'], defaultId: 0, cancelId: 0 });
+    if (result.response !== 1) return false;
+    await runtime.shutdown(); store.reset(); app.relaunch(); app.quit(); return true;
+  });
   h('diagnostics:export', async () => {
     const result=await dialog.showSaveDialog(win,{title:'Save a private-data-free diagnostic report',defaultPath:`deskly-diagnostics-${new Date().toISOString().slice(0,10)}.json`,filters:[{name:'JSON report',extensions:['json']}]});
     if(result.canceled||!result.filePath)return false;
@@ -106,7 +120,6 @@ function wireIPC() {
   h('data:erase', async () => {
     const result = await dialog.showMessageBox(win, { type: 'warning', title: 'Erase all Deskly data?', message: 'Erase settings, keys, memories, boards, tasks and local logs?', detail: 'Your project files will remain. Deskly will restart with a fresh office.', buttons: ['Cancel', 'Erase Deskly data'], defaultId: 0, cancelId: 0 });
     if (result.response !== 1) return false;
-    if (store.getConfig()?.workspace) chosenProject(store.getConfig().workspace);
     await runtime.shutdown();
     // Erase on next launch, after Chromium closes its open database files.
     fs.writeFileSync(path.join(app.getPath('userData'), 'erase-on-start'), 'confirmed');
@@ -116,7 +129,7 @@ function wireIPC() {
   h('provider:test', async (profile, id) => {
     const saved = profile.keyFrom ? savedProfile(profile.keyFrom) : id && savedProfile(id);
     const ownerId = profile.keyFrom || id;
-    const p = bindTestProfile(profile, saved, saved ? store.getSecret(ownerId, saved) : '');
+    const p = bindTestProfile(profile, saved, saved ? sharedKey(store.getConfig() || {}, ownerId, (owner, setup) => store.getSecret(owner, setup)) : '');
     return operation(signal => testProfile(p, signal));
   });
   h('workspace:choose', async () => {
@@ -134,6 +147,9 @@ function wireIPC() {
   h('workspace:list', (p, depth) => ws().listDir(p || '.', depth || 3));
   h('workspace:read', p => ws().readFile(p, 400000));
   h('workspace:write', (p, c) => ws().writeFile(p, c));
+  h('workspace:editor-read', p => ws().openEditor(p));
+  h('workspace:editor-list', (p, offset) => ws().listPage(p, offset));
+  h('workspace:editor-save', (p, text, version) => ws().saveEditor(p, text, version));
   h('workspace:open', () => shell.openPath(ws().resolve('.')));
   h('terminal:run', cmd => operation(signal => ws().runCommand(cmd, { timeoutMs: 180000, founder: true, signal })));
   h('tasks:snapshot', () => runtime.snapshot());
@@ -164,16 +180,18 @@ function wireIPC() {
   });
   h('employee:reply', (id, ctx, history) => runtime.reply(id, ctx, history));
   h('meeting:ideas', (topic, people) => runtime.meetingIdeas(topic, people));
+  h('meeting:cancel', () => runtime.cancelMeetingIdeas());
   h('group:list',()=>runtime.groups.list());
   h('group:start',(room,topic,ids)=>runtime.groups.create(room,topic,ids));
   h('group:get',id=>runtime.groups.snapshot(id));
   h('group:send',(id,text,responders)=>runtime.groups.send(id,text,responders));
   h('group:cancel',id=>runtime.groups.cancel(id));
   h('group:end',id=>runtime.groups.end(id));
+  h('group:delete',id=>runtime.groups.delete(id));
   h('group:decision',(id,text)=>runtime.groups.decision(id,text));
   h('assistant:chat', (history, context) => runtime.assistant(history, context));
   h('shell:external', url => { if (/^https:\/\//.test(url)) shell.openExternal(url); return true; });
-  h('app:fullscreen', v => { win.setFullScreen(v ?? !win.isFullScreen()); return win.isFullScreen(); });
+  h('app:fullscreen', v => { if (!win || win.isDestroyed()) return false; win.setFullScreen(v ?? !win.isFullScreen()); return win.isFullScreen(); });
   h('app:quit', () => app.quit());
 }
 
@@ -187,7 +205,7 @@ app.whenReady().then(async () => {
     // storage through Electron, and remove only Deskly's own persisted files.
     await session.defaultSession.clearStorageData();
     await session.defaultSession.clearCache();
-    for (const name of fs.readdirSync(resolved)) if (/^(?:deskly-(?:config|secrets)\.json|tasks\.json|team-context\.json|project-map-approvals\.json|audit(?:\.1)?\.jsonl|deskly-errors\.log)(?:$|\.)/.test(name)) await fs.promises.rm(path.join(resolved, name), { force: true });
+    for (const name of fs.readdirSync(resolved)) if (/^(?:deskly-(?:config|secrets)\.json|tasks\.json|team-context\.json|group-conversations\.json|project-map-approvals\.json|audit(?:\.1)?\.jsonl|deskly-errors\.log)(?:$|\.)/.test(name)) await fs.promises.rm(path.join(resolved, name), { force: true });
     await fs.promises.unlink(path.join(resolved, 'erase-on-start'));
   }
   nativeTheme.themeSource = 'dark';
@@ -212,7 +230,23 @@ app.whenReady().then(async () => {
   });
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(wc === win?.webContents && wc.getURL() === APP_URL && (perm === 'pointerLock' || perm === 'fullscreen')));
   session.defaultSession.setPermissionCheckHandler((wc, perm, origin) => wc === win?.webContents && wc.getURL() === APP_URL && origin === 'app://deskly' && ['pointerLock', 'fullscreen'].includes(perm));
+  updates = new Updates({
+    enabled: app.isPackaged && process.platform === 'win32' && !process.argv.includes('--deskly-visual-check'),
+    updater: app.isPackaged && process.platform === 'win32' ? require('electron-updater').autoUpdater : null,
+    notify: state => { if (state.status === 'error' && quitting && !runtime.stopping) quitting = false; if (win && !win.isDestroyed()) win.webContents.send('updates:changed', state); },
+    busy: () => operations.size > 0 || runtime.conversations.size > 0 || runtime.groups.runs.size > 0 || [...runtime.tasks.values()].some(t => ACTIVE.has(t.status)),
+    confirm: async () => (await dialog.showMessageBox(win, { type: 'question', title: 'Restart to update Deskly?', message: 'Install the downloaded update and restart?', detail: 'Save unsaved editor text and settings first. Saved project files and Deskly data are kept.', buttons: ['Keep working', 'Restart to update'], defaultId: 0, cancelId: 0 })).response === 1,
+    prepare: async () => {
+      quitting = true;
+      try { await runtime.flush(); }
+      catch (error) { quitting = false; throw error; }
+    }
+  });
   wireIPC(); menu(); createWindow();
+  if (updates.enabled) {
+    const timer = setTimeout(() => updates.check(), 15000); timer.unref();
+    const interval = setInterval(() => updates.check(), 6 * 60 * 60 * 1000); interval.unref();
+  }
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 }).catch(err => { dialog.showErrorBox('Deskly could not start', String(err.message || err)); app.quit(); });
 app.on('before-quit', event => {

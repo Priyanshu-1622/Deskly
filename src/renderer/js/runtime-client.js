@@ -15,6 +15,7 @@
       this.tasks.clear(); s.tasks.forEach(t => this.tasks.set(t.id, t)); this.approvals = s.approvals;
       if (!this.unsub) this.unsub = DK.onRuntimeEvent(evt => {
         if (evt.task) this.tasks.set(evt.task.id, evt.task);
+        else if (evt.taskId && this.tasks.has(evt.taskId)) { const task = this.tasks.get(evt.taskId); if (evt.type === 'task.progress') task.progress = evt.progress; if (evt.type === 'task.output') { task.logs.push({ t: Date.parse(evt.timestamp), text: String(evt.text).slice(0, 400) }); task.logs = task.logs.slice(-300); } }
         if (evt.approvals) this.approvals = evt.approvals;
         if (evt.type === 'runtime.history_cleared') this.init();
         this.bus.emit(evt.type, evt);
@@ -34,5 +35,6 @@
     save() { }
   }
   const errorCopy = e => (e && (e.message || e.error)) || 'Something went wrong.';
-  window.DesklyRuntime = { EventBus, RuntimeClient, ACTIVE, errorCopy };
+  const historyForIPC = history => history.slice(-40).map(m => ({ role: m.role, content: String(m.content).slice(0, 50000) }));
+  window.DesklyRuntime = { EventBus, RuntimeClient, ACTIVE, errorCopy, historyForIPC };
 })();

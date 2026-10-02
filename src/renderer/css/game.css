@@ -1,5 +1,6 @@
 
 /* Layout: full-bleed first-person canvas; glass HUD docked to corners; a side sheet (bottom sheet on phones) for conversations and task review */
+.md table{border-collapse:collapse;width:100%;margin:12px 0}.md th,.md td{border:1px solid var(--rule);padding:7px;text-align:left}.md a{color:var(--accent);text-decoration:underline}
 :root{
   /* Deskly "Wayfinding" system: office signage — olive-graphite plates, signal-yellow
      markers, condensed DIN-style type, square corners, hairline rules, no glass. */

@@ -1,0 +1,297 @@
+{
+  "spawn": {
+    "x": 20,
+    "z": -6.4,
+    "yaw": 3.141592653589793
+  },
+  "arrival": {
+    "x": 20,
+    "z": -7.4
+  },
+  "entry": {
+    "x": 20,
+    "z": 2.6
+  },
+  "rooms": [
+    [
+      "CEO office",
+      0,
+      24.8,
+      10,
+      36,
+      "CEO_Office"
+    ],
+    [
+      "Boardroom",
+      10,
+      28,
+      18,
+      36,
+      "Boardroom"
+    ],
+    [
+      "Meeting 1",
+      18,
+      28,
+      22,
+      36,
+      "Meeting_1"
+    ],
+    [
+      "Meeting 2",
+      22,
+      28,
+      26,
+      36,
+      "Meeting_2"
+    ],
+    [
+      "Meeting 3",
+      26,
+      28,
+      30,
+      36,
+      "Meeting_3"
+    ],
+    [
+      "HR office",
+      30,
+      28,
+      36,
+      36,
+      "HR_Office"
+    ],
+    [
+      "Finance office",
+      36,
+      28,
+      42,
+      36,
+      "Finance_Office"
+    ],
+    [
+      "Server room",
+      42,
+      28,
+      45,
+      36,
+      "Server_Room"
+    ],
+    [
+      "Research lab",
+      45,
+      28,
+      56,
+      36,
+      "RnD_Lab"
+    ],
+    [
+      "Fire exit",
+      56,
+      28,
+      60,
+      36,
+      "Fire_Stair"
+    ],
+    [
+      "Kitchen",
+      0,
+      0,
+      9,
+      8,
+      "Kitchen"
+    ],
+    [
+      "Reception",
+      13,
+      0,
+      27,
+      8,
+      "Reception"
+    ],
+    [
+      "Washrooms",
+      33,
+      0,
+      40,
+      8,
+      "Washrooms"
+    ],
+    [
+      "Training",
+      40,
+      0,
+      49,
+      8,
+      "Training_Room"
+    ],
+    [
+      "Wellness",
+      49,
+      0,
+      52.5,
+      8,
+      "Wellness_Room"
+    ],
+    [
+      "First aid",
+      52.5,
+      0,
+      55.5,
+      8,
+      "First_Aid"
+    ],
+    [
+      "Mailroom",
+      55.5,
+      0,
+      60,
+      8,
+      "Mail_Room"
+    ],
+    [
+      "Engineering",
+      0,
+      9.6,
+      16.5,
+      24.8,
+      "Dept_Engineering"
+    ],
+    [
+      "Design",
+      16.5,
+      17.6,
+      24.5,
+      26.4,
+      "Dept_Design"
+    ],
+    [
+      "Marketing",
+      24.5,
+      17.6,
+      33,
+      26.4,
+      "Dept_Marketing"
+    ],
+    [
+      "Human resources",
+      33,
+      17.6,
+      40,
+      26.4,
+      "Dept_HR"
+    ],
+    [
+      "Finance team",
+      40,
+      17.6,
+      46,
+      26.4,
+      "Dept_Finance"
+    ],
+    [
+      "Research",
+      46,
+      17.6,
+      60,
+      26.4,
+      "Dept_Research"
+    ],
+    [
+      "Café",
+      16.5,
+      9.6,
+      30,
+      16.6,
+      "Cafe_Breakout"
+    ],
+    [
+      "Sales",
+      30,
+      9.6,
+      42,
+      16.6,
+      "Dept_Sales"
+    ],
+    [
+      "IT helpdesk",
+      42,
+      9.6,
+      47,
+      16.6,
+      "IT_Helpdesk"
+    ],
+    [
+      "Support",
+      47,
+      9.6,
+      60,
+      16.6,
+      "Dept_Support"
+    ]
+  ],
+  "seatAnchors": {
+    "Dept_Engineering": [
+      8,
+      16.5
+    ],
+    "Dept_Design": [
+      20.5,
+      17.6
+    ],
+    "Dept_Marketing": [
+      28.5,
+      17.6
+    ],
+    "Dept_Research": [
+      52,
+      17.6
+    ],
+    "Dept_Finance": [
+      43,
+      17.6
+    ],
+    "Dept_Sales": [
+      36,
+      16.6
+    ],
+    "Dept_Support": [
+      53,
+      16.6
+    ],
+    "Dept_HR": [
+      36.5,
+      17.6
+    ],
+    "IT_Helpdesk": [
+      44,
+      14
+    ],
+    "Reception": [
+      19,
+      6.3
+    ]
+  },
+  "meetingCenters": {
+    "CEO_Office": [
+      3.3,
+      27.3
+    ],
+    "Boardroom": [
+      14,
+      32.2
+    ],
+    "Meeting_1": [
+      20,
+      32.2
+    ],
+    "Meeting_2": [
+      24,
+      32.2
+    ],
+    "Meeting_3": [
+      28,
+      32.2
+    ]
+  }
+}

@@ -104,20 +104,26 @@ async function chat(profile, { system, messages, maxTokens = 2048 }, signal, onU
       body: JSON.stringify({ model, max_tokens: maxTokens, system, messages })
     }, signal);
     try { onUsage?.({ input: tokenCount(body.usage?.input_tokens) + tokenCount(body.usage?.cache_creation_input_tokens) + tokenCount(body.usage?.cache_read_input_tokens), output: tokenCount(body.usage?.output_tokens), cached: tokenCount(body.usage?.cache_read_input_tokens) }); } catch { }
-    return (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    if (body.stop_reason === 'max_tokens') throw new ProviderError('The reply was cut off. Write a smaller chunk, then append the next chunk.', 'truncated_response');
+    const text = (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    if (!text.trim()) throw new ProviderError('The provider returned no text. Try another model.', 'empty_response');
+    return text;
   }
   const base = endpoint;
   if (!base) throw new ProviderError('Set a base URL for this custom provider.', 'config');
   const headers = { 'content-type': 'application/json' };
   if (profile.apiKey) headers.authorization = `Bearer ${profile.apiKey}`;
-  const outputLimit = Math.max(1, Math.min(4096, Number(maxTokens) || 2048));
+  const outputLimit = completionBudget(profile, maxTokens);
   const body = await httpJSON(`${base}/chat/completions`, {
     method: 'POST', headers,
     body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, ...messages],
       ...(profile.provider === 'openai' ? { max_completion_tokens: outputLimit } : { max_tokens: outputLimit }) })
   }, signal);
   try { onUsage?.({ input: tokenCount(body.usage?.prompt_tokens ?? body.usage?.input_tokens), output: tokenCount(body.usage?.completion_tokens ?? body.usage?.output_tokens), cached: tokenCount(body.usage?.prompt_tokens_details?.cached_tokens ?? body.usage?.input_tokens_details?.cached_tokens) }); } catch { }
-  return body.choices?.[0]?.message?.content || '';
+  if (body.choices?.[0]?.finish_reason === 'length') throw new ProviderError('The reply was cut off. Write a smaller chunk, then append the next chunk.', 'truncated_response');
+  const text = body.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) throw new ProviderError('The provider returned no text. Try another model.', 'empty_response');
+  return text;
 }
 
 function parseJSON(text) {
@@ -167,4 +173,9 @@ async function testProfile(profile, signal) {
   return { ok: true, ms: Date.now() - t0, sample: text.slice(0, 40) };
 }
 
-module.exports = { PROVIDERS, chat, parseJSON, testProfile, ProviderError, endpointFor, bindTestProfile };
+function completionBudget(profile, requested = 2048) {
+  const model = profile.model || PROVIDERS[profile.provider]?.defaultModel || '';
+  const reasoning = profile.provider === 'gemini' || profile.provider === 'openai' && /^(?:gpt-5|o[134])(?:[-.]|$)/i.test(model);
+  return Math.max(reasoning ? 4096 : 1, Math.min(16384, Number(requested) || 2048));
+}
+module.exports = { PROVIDERS, chat, parseJSON, testProfile, ProviderError, endpointFor, bindTestProfile, completionBudget };

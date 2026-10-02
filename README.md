@@ -8,19 +8,19 @@
 ![Version](https://img.shields.io/github/package-json/v/Priyanshu-1622/Deskly?label=version&color=f2c230)
 ![License](https://img.shields.io/github/license/Priyanshu-1622/Deskly?color=6aa981)
 ![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron&logoColor=white)
-![Status](https://img.shields.io/badge/status-prototype-f2c230)
+![Status](https://img.shields.io/badge/status-early_access-f2c230)
 [![Last commit](https://img.shields.io/github/last-commit/Priyanshu-1622/Deskly?color=718b65)](https://github.com/Priyanshu-1622/Deskly/commits/main)
 
 **Walk through a 3D office, give AI teammates work on your project, and review what they build.**
 
-[Get started](#get-started) · [See the app](#inside-deskly) · [How it works](#how-work-moves-through-deskly) · [Safety and limits](#safety-and-current-limits)
+[Get started](#get-started) · [See the app](#inside-deskly) · [How it works](#how-work-moves-through-deskly) · [Current limitations](docs/LIMITATIONS.md)
 
 </div>
 
 Deskly is an open-source, first-person **desktop app** built with Electron. You can hire a team, customize each employee's role and instructions, assign real project tasks, and work from your own laptop in the office. Employees use AI for assigned work, conversations, and meetings; ordinary office movement makes no AI calls. Choose an installed Codex or Claude Code login, a hosted API provider, a local model, or demo mode with simulated tasks.
 
 > [!NOTE]
-> Deskly is a working prototype. The screens below come from the actual Windows app using a sample company and demo mode. AI output quality, cost savings, and cross-platform packages have not been validated for a production release.
+> These screenshots show Deskly running on Windows with a demo team. Demo mode lets you explore the office without an AI connection; connect a supported provider to give employees real project work. See [release readiness](docs/RELEASE-READINESS.md) for verified checks and platform availability.
 
 ## Inside Deskly
 
@@ -82,7 +82,7 @@ Each role ships with a detailed default playbook, and you can replace it for any
 
 The first-day introduction includes **Try a guided project task**: check one connection, assign a small task, review permissions and inspect its result. For help, see the [user guide](docs/USER-GUIDE.md). **Settings → Privacy & data** can save a diagnostic report with versions and counts, excluding keys, private text and paths. [Privacy and storage details](docs/PRIVACY.md).
 
-The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The current source passes 87 automated checks. Desktop checks cover the guided first task and a discussion with all 15 employees, selected replies, shared decisions, a two-person CEO discussion, a missing API key, and reopening history without renderer errors.
+The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The current source passes 111 automated checks. Desktop checks cover the guided first task and a discussion with all 15 employees, selected replies, shared decisions, a two-person CEO discussion, a missing API key, and reopening history without renderer errors.
 
 ### Lead a shared discussion
 
@@ -92,7 +92,17 @@ Use **Save shared decision** for facts the group has agreed on; these enter each
 
 ## Get started
 
-You need **Node.js 22.13+** and npm. Windows is the currently tested desktop target; macOS and Linux package targets are configured but still need verification.
+### Install on Windows
+
+Download [Deskly 0.1.0 for Windows (64-bit)](https://github.com/Priyanshu-1622/Deskly/releases/download/v0.1.0/Deskly-Setup-0.1.0-x64.exe), run the installer, then follow the first-day guide. Node.js is not required for the installed app. Start in demo mode or connect an AI provider for real project work.
+
+The installed Windows app checks GitHub Releases at startup and every six hours, downloading newer versions in the background. Choose **Restart to update** when ready; active tasks, conversations and commands block installation. Save unsaved editor text and settings first. **Settings → Updates** includes a manual check and release notes.
+
+This early-access installer is unsigned and may show a Windows publisher warning. macOS and Linux packages are not verified or published. See [release notes and checksums](https://github.com/Priyanshu-1622/Deskly/releases/tag/v0.1.0) and [current limitations](docs/LIMITATIONS.md).
+
+### Run from source
+
+You need **Node.js 22.13+** and npm. Windows is the currently tested desktop target; macOS and Linux package targets are configured but still need verification. Linux API-key storage requires an unlocked Secret Service keyring (for example GNOME Keyring or KWallet); Deskly refuses plaintext key storage.
 
 ```bash
 git clone https://github.com/Priyanshu-1622/Deskly.git
@@ -116,7 +126,7 @@ npm run dist:win  # build the Windows installer into dist/
 
 The repository also declares `dist:mac` and `dist:linux` targets. Run those on their respective platforms once packaging has been verified there.
 
-Source pushes run checks without packaging or uploading an app. Packaging workflows require a manual dispatch. Old local installers and unpacked apps are excluded from the repository; use the source instructions above until a new approved package is released.
+Source pushes run checks without packaging or uploading an app. Packaging workflows require a manual dispatch. Installers are distributed as GitHub Release attachments; generated packages and old unpacked apps are excluded from the source repository.
 
 ### Controls
 
@@ -142,6 +152,8 @@ Source pushes run checks without packaging or uploading an app. Packaging workfl
 
 ## How work moves through Deskly
 
+<img src="docs/workflow.svg" alt="Assign, build in role folders, review changes and inspect the deliverable" width="100%">
+
 ```text
 You assign a task
       ↓
@@ -156,16 +168,18 @@ You review the result, touched files, and audit trail
 
 Idle office animations make no AI calls. Assigned work, employee conversations, meetings, and the laptop assistant can use AI. Plans and short conversations can use a cheaper model, while execution uses the employee's main model. Usage metering and a monthly ceiling help control cost; actual spend still depends on the provider and tasks. Installed CLI connectors currently start a fresh process for each model turn, so long tasks can have substantial prompt overhead.
 
+<img src="docs/agent-activity.svg" alt="Local office life, requested AI work and verified memory for future tasks" width="100%">
+
 ## Safety and current limits
 
 - Project file tools stay within the chosen folder and reject symbolic link paths and common secret filenames. This does **not** sandbox the entire app.
 - API keys are encrypted with Electron `safeStorage` and bound to their provider and endpoint. Changing the endpoint requires a matching key; a previous key is not forwarded. Saving a key fails if secure storage is unavailable.
 - Approved shell commands run with your OS permissions and can reach outside the project folder. Review the full command and working directory. Secret environment variables are excluded; cancellation and quit stop the process tree.
 - Email, publishing, deployment, and payment requests are approval-gated and recorded. Deskly does not execute those external actions yet.
-- Default employees use textured, skinned character models with procedural animation. Further clothing options, facial animation, and movement refinement are still in progress.
+- Four textured, skinned character models and outfit variants are available, with shared distance detail and procedural animation. Facial animation and authored movement clips remain planned improvements.
 - New offices request approval for file writes by default. Sensitive configuration and existing files outside the assigned area always require review.
 - Damaged local data is preserved for recovery; interrupted checkpoints expire after three days. Privacy settings can erase all Deskly data while keeping project files.
-- Deskly is a prototype. Review the implementation and keep backups before allowing it to edit an important project. [Release gates and update policy](RELEASE_POLICY.md) describe the remaining signing, platform and live-provider checks.
+- This first version is early access. Start with a small project, keep backups and review generated work. [Current limitations](docs/LIMITATIONS.md) and the [release/update policy](RELEASE_POLICY.md) explain platform support, local storage, provider validation and release checks.
 
 Deskly now includes detailed, customizable employee models with textured faces, eyes, hair and clothing; authored exterior trees; and a full roof with glass skylights. The CEO workstation has detailed furniture, dedicated leather maps, filtered reflections and sun shadows. Further wardrobe, facial animation and wider furniture refinement are in progress. [See the realism direction](docs/REALISM_DIRECTION.md) and [asset credits / character intake](docs/ASSET_CREDITS.md) for the current scope and source assets.
 
@@ -181,6 +195,10 @@ Deskly now includes detailed, customizable employee models with textured faces, 
 
 The agent loop and its current limitations are described in [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md). Contributions and issue reports are welcome.
 
+## Contact
+
+For questions, support or feedback, email [desklymanager1@gmail.com](mailto:desklymanager1@gmail.com). You can also [report a bug on GitHub](https://github.com/Priyanshu-1622/Deskly/issues). Include your operating system, Deskly version and steps to reproduce the problem; keep API keys and private project data out of reports.
+
 ## License
 
 [MIT](LICENSE) © Priyanshu Patel
@@ -192,4 +210,4 @@ Interact with an office whiteboard using **E**, or choose **Whiteboards** on the
 
 To keep everyone at the office overnight, use **Tab → Team → Call everyone back · keep here**. This hold continues across nights and restarts until you send them home; idle workers do not make AI calls.
 
-See [current release readiness](docs/RELEASE-READINESS.md) for verified source checks and remaining release gates, and [the public release plan](docs/PUBLIC-RELEASE-PLAN.md) for the broader roadmap.
+See the [Claude audit remediation](docs/AUDIT-REMEDIATION.md) for the source fixes, verification and remaining validation gates. See [current release readiness](docs/RELEASE-READINESS.md) for verified source checks and remaining release gates, and [the public release plan](docs/PUBLIC-RELEASE-PLAN.md) for the broader roadmap.

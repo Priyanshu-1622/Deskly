@@ -19,11 +19,12 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   function md(src) {
     const out = []; const lines = String(src).split('\n'); let i = 0, list = null;
-    const inl = t => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+    const inl = t => esc(t).replace(/\[([^\]]+)\]\((https:\/\/[^\s<>]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
     const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
     while (i < lines.length) {
       const l = lines[i];
       if (/^```/.test(l)) { close(); const buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`); continue; }
+      if (l.includes('|') && /^\s*\|?\s*:?-{3,}/.test(lines[i+1] || '')) { close(); const cells = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim()); out.push('<table><thead><tr>' + cells(l).map(cell => '<th>' + inl(cell) + '</th>').join('') + '</tr></thead><tbody>'); i += 2; while (i < lines.length && lines[i].includes('|') && lines[i].trim()) { out.push('<tr>' + cells(lines[i++]).map(cell => '<td>' + inl(cell) + '</td>').join('') + '</tr>'); } out.push('</tbody></table>'); continue; }
       let m;
       if ((m = l.match(/^(#{1,4})\s+(.*)/))) { close(); out.push(`<h3>${inl(m[2])}</h3>`); }
       else if ((m = l.match(/^\s*[-*•]\s+(.*)/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inl(m[1])}</li>`); }
@@ -43,7 +44,7 @@
     constructor(app) {
       this.app = app; this.tags = new Map(); this.panelKind = null; this.chats = new Map();
       this.mm = $('#mm').getContext('2d');
-      this.buildMinimapBase();
+      // The atlas installs the collision-derived floor plan after UI creation.
       this.bindKeys();
       if (app.player.touch) this.touchControls();
     }
@@ -95,7 +96,7 @@
     /* ---------------- name tags / bubbles ---------------- */
     tagsUpdate(camera) {
       const W = innerWidth, H = innerHeight, cam = camera.position;
-      const fwd = new T.Vector3(); camera.getWorldDirection(fwd);
+      const fwd = this.tagForward ||= new T.Vector3(); camera.getWorldDirection(fwd);
       for (const e of this.app.office.employees) {
         let tag = this.tags.get(e.id);
         if (!tag) {
@@ -104,10 +105,11 @@
         }
         const p = e.head; p.y += 0.42;
         const d = p.distanceTo(cam);
-        const v = p.clone().sub(cam);
-        const show = e.present && d < 14 && v.dot(fwd) > 0.2;
+        const v = (this.tagVector ||= new T.Vector3()).copy(p).sub(cam);
+        let show = e.present && d < 14 && v.dot(fwd) > 0.2;
+        if (show) for (let step = .4; step < d - .6; step += .4) { const fraction = step / d; if (this.app.nav.blockedAt(cam.x + v.x * fraction, cam.z + v.z * fraction, false)) { show = false; break; } }
         if (!show) { tag.el.style.display = 'none'; continue; }
-        const s = p.clone().project(camera);
+        const s = (this.tagScreen ||= new T.Vector3()).copy(p).project(camera);
         tag.el.style.display = '';
         tag.el.style.left = ((s.x + 1) / 2 * W) + 'px'; tag.el.style.top = ((1 - s.y) / 2 * H) + 'px';
         tag.el.style.opacity = d > 10 ? String(1 - (d - 10) / 4) : '1';
@@ -120,38 +122,6 @@
         const bt = e.bubble && d < 11 ? e.bubble.text : '';
         if (tag.bt !== bt) { tag.bt = bt; tag.bubble.textContent = bt; tag.bubble.style.display = bt ? '' : 'none'; }
       }
-    }
-
-    /* ---------------- minimap ---------------- */
-    buildMinimapBase() {
-      if(this.mmBase)return;
-      const nav = this.app.nav, c = document.createElement('canvas');
-      c.width = 480; c.height = 288;
-      const g = c.getContext('2d'), sx = 480 / 60, sz = 288 / 36;
-      g.fillStyle = '#1b2227'; g.fillRect(0, 0, 480, 288);
-      const img = g.getImageData(0, 0, 480, 288);
-      for (let py = 0; py < 288; py++) for (let px = 0; px < 480; px++) {
-        const x = px / sx, z = 36 - py / sz;
-        if (nav.blockedAt(x, z, false)) { const o = (py * 480 + px) * 4; img.data[o] = 88; img.data[o + 1] = 101; img.data[o + 2] = 108; }
-      }
-      g.putImageData(img, 0, 0);
-      g.fillStyle = 'rgba(233,238,240,.55)'; g.font = '600 10px Manrope, sans-serif';
-      for (const [t, x, z] of [['Engineering', 3, 25.6], ['Design', 17, 25.6], ['Marketing', 25, 25.6], ['HR', 34, 25.6], ['Finance', 40.5, 25.6], ['Research', 47, 25.6], ['Café', 19, 10.4], ['Sales', 31, 10.4], ['IT', 43, 10.4], ['Support', 48, 10.4], ['CEO', 2, 34.6], ['Boardroom', 11, 34.6], ['R&D', 46, 34.6], ['Reception', 16, 1.4], ['Kitchen', 1, 1.4], ['Training', 41, 1.4]])
-        g.fillText(t, x * sx, (36 - z) * sz);
-      this.mmBase = c; this.mmS = [sx, sz];
-    }
-    minimap(player, employees) {
-      const g = this.mm, [sx, sz] = this.mmS;
-      g.drawImage(this.mmBase, 0, 0);
-      for (const e of employees) {
-        if (!e.present) continue;
-        g.fillStyle = DesklyAgents.STATUS[e.state].color;
-        g.beginPath(); g.arc(e.pos.x * sx, (36 - e.pos.z) * sz, e.state === 'WAITING_FOR_APPROVAL' ? 5.5 : 4, 0, 7); g.fill();
-      }
-      const px = player.pos.x * sx, pz = (36 - player.pos.z) * sz, f = player.forward();
-      g.save(); g.translate(px, pz); g.rotate(Math.atan2(f.x, -f.z) * -1 + Math.PI);
-      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, 8); g.lineTo(5.5, -5); g.lineTo(-5.5, -5); g.closePath(); g.fill();
-      g.restore();
     }
 
     /* ---------------- keys / touch ---------------- */
@@ -188,6 +158,9 @@
     open(kind, header, body, onRender) {
       const p = $('#panel');
       this.panelKind = kind; p.dataset.kind = kind; this.app.player.releaseLock();
+      this.app.player.enabled = false;
+      this.panelScrollUntil = 0;
+      if (!this.scrollWatcher) { this.scrollWatcher = () => { this.panelScrollUntil = performance.now() + 160; }; p.addEventListener?.('scroll', this.scrollWatcher, { capture: true, passive: true }); }
       p.replaceChildren(header, ...[].concat(body));
       p.hidden = false;
       this.onRender = onRender || null;
@@ -198,6 +171,7 @@
       const e = this.panelEmp;
       if (e) { e.interacting = false; if (e.state === 'INTERACTING') e.setState('AVAILABLE'); if (!e.meeting && !e.errand && !e.atDesk()) { e.clear(); e.goDesk(); } }
       this.panelEmp = null; this.panelKind = null; this.onRender = null;
+      this.app.player.enabled = !!this.app.playing;
       $('#panel').hidden = true;
       if (this.app.player.touch) { $('#joy').hidden = false; $('#tbtns').hidden = false; }
       if (this.app.playing) {
@@ -216,7 +190,7 @@
         h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => this.close() }, '✕'));
     }
     tick() {
-      if (!this.onRender) return;
+      if (!this.onRender || (this.panelScrollUntil && performance.now() < this.panelScrollUntil)) return;
       try { this.onRender(); }
       catch (error) {
         console.error('Deskly panel update failed', error);
@@ -251,10 +225,13 @@
       const history = this.chats.get(e.id) || []; this.chats.set(e.id, history);
       const renderChat = () => chatBox.replaceChildren(...history.slice(-6).map(m => h('div', { class: m.role === 'user' ? 'me' : 'them' }, m.content)));
       renderChat();
-      assignBtn.onclick = () => {
+      assignBtn.onclick = async () => {
         const d = ta.value.trim(); if (!d) { ta.focus(); return; }
         if (rt.activeFor(e.id)) { this.toast(`${fname(e.name)} is already on a task. Stop it first or wait for the result.`, '#f0a020'); return; }
-        rt.create({ employee: e, description: d }); ta.value = '';
+        assignBtn.disabled = true;
+        const created = await rt.create({ employee: e, description: d }); assignBtn.disabled = false;
+        if (!created) return;
+        ta.value = '';
         e.say(['On it!', 'Got it — starting now.', 'Great, I\'ll get going.'][Math.floor(Math.random() * 3)], 2.5);
         this.toast(`Assigned to ${e.name}: ${d.slice(0, 60)}`, e.color);
         e.interacting = false; e.clear(); e.goDesk();
@@ -266,8 +243,8 @@
         askBtn.disabled = true; const pending = h('div', { class: 'them' }, '…'); chatBox.append(pending);
         const t = rt.activeFor(e.id);
         const ctxLine = t ? `working on "${t.title}" (${STATUS_LABEL[t.status]}, ${Math.round(t.progress * 100)}%)` : 'available, no active task';
-        try { const r = await DK.employeeReply(e.id, ctxLine, history); history.push({ role: 'assistant', content: r }); e.say(r.slice(0, 160), 6); }
-        catch (err) { history.pop(); this.toast(DesklyRuntime.errorCopy(err), '#e0504a'); }
+        try { const r = await DK.employeeReply(e.id, ctxLine.slice(0, 3000), DesklyRuntime.historyForIPC(history)); history.push({ role: 'assistant', content: r }); e.say(r.slice(0, 160), 6); }
+        catch (err) { history.pop(); ta.value = d; this.toast(DesklyRuntime.errorCopy(err), '#e0504a'); }
         askBtn.disabled = false; renderChat();
       };
       const ideas = h('div', { class: 'ideas' }, ...e.tasks.map(t => h('button', { type: 'button', onclick: () => { ta.value = t; ta.focus(); } }, t)));
@@ -360,11 +337,13 @@
       const overview = h('aside', { class: 'operations-overview' });
       const bar = h('div', { class: 'tabs', role: 'tablist' });
       const body = h('div', { class: 'body' });
-      let cur = tab, lastKey = '';
+      let cur = tab, lastKey = '', teamOffice = null, teamRoot = null, updateTeam = null;
       const renderTabs = () => bar.replaceChildren(...tabs.map(t => h('button', { type: 'button', role: 'tab', 'aria-selected': String(t === cur), onclick: () => { cur = t; lastKey = ''; renderTabs(); render(); } }, names[t] + (t === 'approvals' && rt.pendingApprovals().length ? ` (${rt.pendingApprovals().length})` : ''))));
       const render = () => {
-        const key = cur + Math.floor(performance.now() / 5000) + rt.list().map(t => t.status + (t.progress * 20 | 0)).join() + rt.pendingApprovals().length + app.office.employees.map(e => `${e.state}:${e.present}:${e.activity}`).join() + app.office.shift.overtime.join() + app.office.shift.recalled.join() + app.office.shift.sentHome.join() + (cur === 'audit' ? app.audit.entries.length : '');
-        if (key === lastKey) return; lastKey = key; renderTabs();
+        const key = cur + '' + rt.list().map(t => t.status + (t.progress * 20 | 0)).join() + rt.pendingApprovals().length + app.office.employees.map(e => `${e.state}:${e.present}:${e.activity}`).join() + app.office.shift.overtime.join() + app.office.shift.recalled.join() + app.office.shift.sentHome.join() + (cur === 'audit' ? app.audit.entries.length : '');
+        if (key === lastKey) return; lastKey = key;
+        if(cur==='team' && teamOffice===app.office && teamRoot?.isConnected){updateTeam();const counts=overview.querySelectorAll('.operations-counts b');if(counts.length===2){counts[0].textContent=String(rt.pendingApprovals().length).padStart(2,'0');counts[1].textContent=String(rt.list().filter(task=>['created','queued','planning','running','reviewing'].includes(task.status)).length).padStart(2,'0');}return;}
+        renderTabs();
         overview.replaceChildren(h('h2', {}, cur === 'approvals' ? 'Needs your say.' : 'Your company, at work.'), h('div', { class: 'operations-counts' }, h('div', {}, h('b', {}, String(rt.pendingApprovals().length).padStart(2, '0')), h('span', { class: 'label' }, 'Waiting')), h('div', {}, h('b', {}, String(rt.list().filter(task => ['created', 'queued', 'planning', 'running', 'reviewing'].includes(task.status)).length).padStart(2, '0')), h('span', { class: 'label' }, 'Running'))), h('p', { class: 'note' }, 'Review exact changes here. Commands can access your computer; approving them does not create a sandbox.'), h('p', { class: 'note' }, 'Protected configuration always asks before writing.'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { this.close(); app.pause(); app.screens.openSettings('memory'); } }, 'Memory & usage settings'));
         DK.tasksSnapshot().then(snapshot => { const errors = [...(snapshot.notices || []), snapshot.lastSaveError, snapshot.lastAuditError].filter(Boolean); if (!body.isConnected || !errors.length) return; const notice = h('div', { class: 'card amber' }, h('h3', {}, 'Local data needs attention'), ...errors.map(message => h('p', {}, message))); body.prepend(notice); }).catch(() => {});
         if (cur === 'tasks') {
@@ -392,30 +371,25 @@
           const ap = rt.pendingApprovals();
           body.replaceChildren(ap.length ? h('div', { class: 'list' }, ...ap.map(a => {
             const e = app.office.byId(a.employeeId), t = rt.get(a.taskId);
-            return h('div', { class: 'slip approval-slip' }, h('div', { class: 't' }, `${e.name} · ${t.title}`), h('div', { style: 'font-size:13px' }, h('b', {}, a.action.kind.replace(/_/g, ' ')), ' · ', a.action.summary), h('div', { class: 'note' }, `Risk: ${a.action.risk}`), a.action.content ? h('pre', { class: 'log' }, a.action.content) : null,
+            return h('div', { class: 'slip approval-slip' }, h('div', { class: 't' }, `${e?.name || a.employeeName || 'Former employee'} · ${t?.title || 'Unavailable task'}`), h('div', { style: 'font-size:13px' }, h('b', {}, a.action.kind.replace(/_/g, ' ')), ' · ', a.action.summary), h('div', { class: 'note' }, `Risk: ${a.action.risk}`), a.action.content ? h('pre', { class: 'log' }, a.action.content) : null,
               h('div', { class: 'row' }, h('button', { class: 'btn warn', type: 'button', onclick: () => rt.respondApproval(a.id, 'approved') }, 'Approve'), h('button', { class: 'btn danger', type: 'button', onclick: () => rt.respondApproval(a.id, 'rejected') }, 'Reject'), h('button', { class: 'btn', type: 'button', onclick: () => this.openEmployee(e) }, 'Open')));
           })) : h('p', { class: 'note' }, 'Nothing is waiting for you.'));
         } else if (cur === 'team') {
-          const office = app.office, afterHours = !app.clockInfo.workday || office.hour() >= 18 || office.hour() < 9;
-          const refresh = () => { lastKey = ''; render(); };
-          body.replaceChildren(
-            h('div', { class: 'card' }, h('div', { class: 't' }, 'Office shift'),
-              h('p', { class: 'note' }, `${afterHours ? 'After hours.' : 'The normal shift is 09:00–18:00.'} Calling the team back keeps them here through the night and across restarts until you send them home. Their active tasks continue if you send them home.`),
-              h('div', { class: 'row' },
-                h('button', { class: 'btn primary', type: 'button', onclick: () => { office.employees.forEach(e => office.recall(e)); refresh(); } }, 'Call everyone back · keep here'),
-                h('button', { class: 'btn', type: 'button', onclick: () => { office.employees.forEach(e => office.release(e)); refresh(); } }, 'Send everyone home'))),
-            h('div', { class: 'list' }, ...office.employees.map(e => {
-              const overtime = office.shift.overtime.includes(e.id);
-              const held = overtime || office.shift.recalled.includes(e.id);
-              return h('div', { class: 'item team-item' },
-                h('div', { class: 'avatar', style: `background:${e.color};width:32px;height:32px;font-size:12px;border-radius:9px` }, initials(e.name)),
-                h('div', { class: 'meta' }, h('b', {}, `${e.name} · ${e.role}`), h('small', {}, `${DesklyAgents.STATUS[e.state].label} · ${e.present ? e.activity : 'At home'}`)),
-                h('div', { class: 'row team-actions' },
-                  h('button', { class: 'btn', type: 'button', disabled: held, onclick: () => { office.recall(e); refresh(); } }, held ? 'Held here' : e.present ? 'Keep here' : 'Call back'),
-                  h('button', { class: 'btn' + (overtime ? ' primary' : ''), type: 'button', onclick: () => { office.setOvertime(e, !overtime); refresh(); } }, overtime ? 'End overtime' : 'Overtime'),
-                  h('button', { class: 'btn', type: 'button', onclick: () => { office.release(e); refresh(); } }, 'Send home'),
-                  h('button', { class: 'btn', type: 'button', disabled: !e.present, onclick: () => { office.walkToPlayer(e, 'summon'); e.say('Coming over!', 2); this.close(); } }, 'Summon')));
-            })));
+          const office = app.office, refresh = () => { lastKey = ''; render(); }, shiftNote=h('p',{class:'note'}), rows=[];
+          teamOffice=office;
+          teamRoot=h('div',{class:'list'},...office.employees.map(e=>{
+            const status=h('small',{}),recall=h('button',{class:'btn',type:'button',onclick:()=>{office.recall(e);refresh();}}),overtime=h('button',{class:'btn',type:'button',onclick:()=>{office.setOvertime(e,!office.shift.overtime.includes(e.id));refresh();}}),summon=h('button',{class:'btn',type:'button',onclick:()=>{office.walkToPlayer(e,'summon');e.say('Coming over!',2);this.close();}},'Summon');
+            rows.push({e,status,recall,overtime,summon});
+            return h('div',{class:'item team-item'},h('div',{class:'avatar',style:'background:'+e.color+';width:32px;height:32px;font-size:12px;border-radius:9px'},initials(e.name)),h('div',{class:'meta'},h('b',{},e.name+' · '+e.role),status),h('div',{class:'row team-actions'},recall,overtime,h('button',{class:'btn',type:'button',onclick:()=>{office.release(e);refresh();}},'Send home'),summon));
+          }));
+          updateTeam=()=>{
+            const afterHours=!app.clockInfo.workday || office.hour()>=18 || office.hour()<9;
+            const note=(afterHours?'After hours.':'The normal shift is 09:00–18:00.')+' Calling the team back keeps them here through the night and across restarts until you send them home. Their active tasks continue if you send them home.';
+            if(shiftNote.textContent!==note)shiftNote.textContent=note;
+            for(const row of rows){const {e,status,recall,overtime,summon}=row,extra=office.shift.overtime.includes(e.id),held=extra||office.shift.recalled.includes(e.id),text=DesklyAgents.STATUS[e.state].label+' · '+(e.present?e.activity:'At home');if(status.textContent!==text)status.textContent=text;const label=held?'Held here':e.present?'Keep here':'Call back';if(recall.textContent!==label)recall.textContent=label;recall.disabled=held;overtime.textContent=extra?'End overtime':'Overtime';overtime.classList.toggle('primary',extra);summon.disabled=!e.present;}
+          };
+          body.replaceChildren(h('div',{class:'card'},h('div',{class:'t'},'Office shift'),shiftNote,h('div',{class:'row'},h('button',{class:'btn primary',type:'button',onclick:()=>{office.employees.forEach(e=>office.recall(e));refresh();}},'Call everyone back · keep here'),h('button',{class:'btn',type:'button',onclick:()=>{office.employees.forEach(e=>office.release(e));refresh();}},'Send everyone home'))),teamRoot);
+          updateTeam();
         } else {
           body.replaceChildren(h('div', { class: 'audit' }, ...app.audit.entries.slice(-120).reverse().map(ev => h('div', {}, `${ev.timestamp.slice(11, 19)}  ${ev.type}  ${ev.employeeId || ''} ${ev.status || ev.decision || ev.title || (ev.action ? ev.action.summary : '') || ev.text || ''}`.slice(0, 160)))),
             h('p', { class: 'note' }, 'Every task, status change, approval decision and output line is recorded here.'));
@@ -542,7 +516,7 @@
       const discuss=h('button',{class:'btn primary',type:'button',onclick:()=>send(true)},'Discuss with selected');
       const stop=h('button',{class:'btn danger',type:'button',onclick:async()=>{try{apply(await DK.groupCancel(state.id));status.textContent='Stopping the current reply…';}catch(error){this.toast(error.message,'#e0504a');}}},'Stop discussion');
       const decision=h('input',{type:'text',maxlength:700,placeholder:'A confirmed decision to remember across sessions…'});
-      const save=h('button',{class:'btn',type:'button',onclick:async()=>{if(!decision.value.trim()||!state||pending)return;const text=decision.value.trim();pending=true;controls();try{apply(await DK.groupDecision(state.id,text));m.actions||=[];m.actions.push(text);if(decision.value.trim()===text)decision.value='';this.toast('Decision saved to the participants’ project memories.');}catch(error){this.toast(DesklyRuntime.errorCopy(error),'#e0504a');}finally{pending=false;controls();}}},'Save shared decision');
+      const save=h('button',{class:'btn',type:'button',onclick:async()=>{if(!decision.value.trim()||!state||pending)return;const text=decision.value.trim();pending=true;controls();try{const result=await DK.groupDecision(state.id,text);apply(result);m.actions||=[];m.actions.push(text);if(decision.value.trim()===text)decision.value='';this.toast(result.memoryFailures?.length ? 'Decision saved in the discussion. Some employee memories were not saved; see the discussion for details.' : 'Decision saved to the participants’ project memories.', result.memoryFailures?.length ? '#efad35' : '#2fbf71');}catch(error){this.toast(DesklyRuntime.errorCopy(error),'#e0504a');}finally{pending=false;controls();}}},'Save shared decision');
       const controls=()=>{
         const busy=pending||state?.status==='running',ended=state?.status==='ended';
         post.disabled=!state||busy||ended||!message.value.trim();
@@ -568,7 +542,8 @@
         const id=m.groupSessionId;
         try{const snapshot=await DK.groupGet(id);if(m.groupSessionId===id)apply(snapshot);}catch(error){status.textContent=DesklyRuntime.errorCopy(error);}finally{refreshing=false;}
       };
-      root.append(h('h3',{},'Shared group conversation'),history,status,people,transcript,message,h('div',{class:'row'},post,discuss,stop),cost,h('div',{class:'group-decision'},decision,save));
+      const remove = h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!state || state.status === 'running' || pending) return; if (!confirm('Delete this saved discussion?')) return; try { await DK.groupDelete(state.id); m.groupSessionId = null; m.groupPromise = null; this.meetingLive(); } catch (error) { this.toast(error.message, '#e0504a'); } } }, 'Delete saved discussion');
+      root.append(h('h3',{},'Shared group conversation'),history,status,people,transcript,message,h('div',{class:'row'},post,discuss,stop),cost,h('div',{class:'group-decision'},decision,save),remove);
       controls();
       (async()=>{
         try{
@@ -617,7 +592,7 @@
       const askSpeaker = h('button', { class: 'btn', type: 'button', onclick: () => { if (!selected) return; const line = app.life?.statusLine(selected) || selected.activity; m.speaking = selected; selected.say(line, 6); addLine(selected, line); } }, 'Ask for update');
       const present = h('button', { class: 'btn', type: 'button', onclick: () => { if (!selected) return; app.life?.present(selected, m); renderT(); } }, 'Present latest work');
       const end = h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-        end.disabled=true;
+        end.disabled=true; m.brainstormCancelled = true; await DK.meetingCancel();
         try{if(m.groupPromise&&!m.groupSessionId)m.groupSessionId=(await m.groupPromise).id;if(m.groupSessionId)group.apply(await DK.groupEnd(m.groupSessionId));}
         catch(error){end.disabled=false;this.toast(DesklyRuntime.errorCopy(error),'#e0504a');return;}
         const summary = app.life?.finishMeeting(m); of.endMeeting();
@@ -626,7 +601,7 @@
       let renderedLines=lines.length,renderedActions=m.actions.length;
       const render = () => { group.refresh();b1.disabled=b2.disabled=toolsBusy||group.busy;if(lines.length!==renderedLines){renderedLines=lines.length;renderT();}if(m.actions.length!==renderedActions){renderedActions=m.actions.length;renderActions();}const a = of.meetingArrived(); status.textContent = `${a} of ${m.people.length} arrived in ${m.room.replace('_', ' ')}. ${a < m.people.length ? 'People are still walking over.' : 'Everyone is here.'}`; };
       this.open('meetingLive', this.hdr(m.room === 'CEO_Office' ? 'In your office' : 'Meeting in progress', m.room === 'CEO_Office' ? `${m.people.length} people called in` : m.room.replace('_', ' ')), h('div', { class: 'body' }, status,
-        group.root,h('details',{class:'meeting-tools'},h('summary',{},'Status updates & quick brainstorm'),h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2))),
+        group.root,h('details',{class:'meeting-tools'},h('summary',{},'Status updates & quick brainstorm'),h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2, h('button', { class: 'btn danger', type: 'button', onclick: () => { m.brainstormCancelled = true; DK.meetingCancel().catch(error => this.toast(error.message)); } }, 'Stop brainstorm')))),
         h('div', { class: 'sect' }, h('h3', {}, 'Choose a speaker'), speakerButtons, h('div', { class: 'row' }, askSpeaker, present)),
         h('div', { class: 'sect' }, h('h3', {}, 'Decisions and actions'), actionInput, h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: () => { const value = actionInput.value.trim(); if (!value) return; m.actions.push(value); actionInput.value = ''; renderActions(); } }, 'Add action item')), actionList),
         h('div', { class: 'sect' }, h('h3', {}, 'Transcript'), transcript), h('div', { class: 'row' }, end)), render);

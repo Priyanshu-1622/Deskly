@@ -1537,6 +1537,8 @@ scene.export("corporate_office_v3.glb")
 
 # ---- world data: collision grid, markers, doors
 import json, base64
+from pathlib import Path
+LAYOUT = json.loads(Path(__file__).with_name('office-layout.json').read_text(encoding='utf-8'))
 GX0, GZ0, CELL, NX, NZ_ = -4.0, -8.0, 0.2, 340, 240
 occ = np.zeros((NZ_, NX), np.uint8)
 cx = GX0 + (np.arange(NX) + 0.5) * CELL
@@ -1566,7 +1568,7 @@ for m in MARKERS:
     md = {k: (bool(v_) if isinstance(v_, (bool, np.bool_)) else v_) for k, v_ in m.metadata.items() if k not in ("shape", "extents")}
     marks.append(dict(p=[round(float(x), 3) for x in v[0]], f=[round(float(f[0]), 3), round(float(f[2]), 3)], **md))
 world = dict(grid=dict(x0=GX0, z0=GZ0, cell=CELL, nx=NX, nz=NZ_, bits=base64.b64encode(bits.tobytes()).decode()),
-             markers=marks, doors=DOORS, lifts=LIFTS, bounds=[0, 0, W, D])
+             markers=marks, doors=DOORS, lifts=LIFTS, bounds=[0, 0, W, D], layout=LAYOUT)
 json.dump(world, open("world.json", "w"))
 from collections import Counter
 print("markers", Counter(m["kind"] for m in marks), "doors", len(DOORS), "blocked %", round(occ.mean() * 100, 1))

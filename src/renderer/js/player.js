@@ -3,9 +3,9 @@
 (function () {
   const T = THREE;
   class Player {
-    constructor(camera, dom, nav) {
+    constructor(camera, dom, nav, spawn = {x:0,z:0}) {
       Object.assign(this, { camera, dom, nav });
-      this.pos = new T.Vector3(20, 0, -6.4); this.sens = 1; this.invertY = false; this.yaw = 0; this.pitch = -0.02; this.eyeY = 1.66;
+      this.pos = new T.Vector3(spawn.x, 0, spawn.z); this.sens = 1; this.invertY = false; this.yaw = 0; this.pitch = -0.02; this.eyeY = 1.66;
       this.keys = {}; this.enabled = false; this.bob = 0; this.coffee = 0; this.heldDrink = null; this.sipT = 0;
       this.move = { x: 0, z: 0 }; this.lookDrag = null; this.locked = false; this.sprint = false; this.stepTravel = 0;
       this.touch = matchMedia('(pointer: coarse)').matches;
@@ -36,7 +36,8 @@
         if (this.locked) this.look(e.movementX, e.movementY, 0.0022);
       });
       d.addEventListener('mousedown', e => {
-        if (!this.enabled || this.touch) return;
+        if (!this.enabled) return;
+        this.touch = false;
         if (!this.locked && d.requestPointerLock) {
           try { const r = d.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (err) { }
         }
@@ -48,6 +49,7 @@
       });
       // touch: right side drags look; joystick handled by UI and fed via setMove
       d.addEventListener('touchstart', e => {
+        this.touch = true;
         for (const t of e.changedTouches) if (t.clientX > innerWidth * 0.4 && !this.touchLook) this.touchLook = { id: t.identifier, x: t.clientX, y: t.clientY };
       }, { passive: true });
       d.addEventListener('touchmove', e => {
@@ -60,6 +62,8 @@
       d.addEventListener('touchend', end); d.addEventListener('touchcancel', end);
     }
     look(dx, dy, k) {
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      dx = Math.max(-100, Math.min(100, dx)); dy = Math.max(-100, Math.min(100, dy));
       this.yaw -= dx * k * this.sens; this.pitch -= dy * k * this.sens * (this.invertY ? -1 : 1);
       this.pitch = Math.max(-1.35, Math.min(1.25, this.pitch));
     }
@@ -99,7 +103,6 @@
         const k = this.keys;
         if (k.KeyW || k.ArrowUp) mz += 1; if (k.KeyS || k.ArrowDown) mz -= 1;
         if (k.KeyA || k.ArrowLeft) mx -= 1; if (k.KeyD || k.ArrowRight) mx += 1;
-        if (k.KeyQ) this.yaw += dt * 1.8; if (k.KeyE && false) this.yaw -= dt * 1.8;
       } else { mx = 0; mz = 0; }
       if (this.seated) { if (Math.hypot(mx, mz) > 0.01) { this.seated = false; this.eyeY = 1.66; this.onStand?.(); } mx = 0; mz = 0; }
       const len = Math.hypot(mx, mz);

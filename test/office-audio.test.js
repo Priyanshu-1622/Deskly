@@ -19,7 +19,7 @@ function audioHarness() {
   }
   const window = { AudioContext };
   let clock = 1000;
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/office-audio.js'), 'utf8'), { window, Math, performance: { now: () => clock } });
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/office-audio.js'), 'utf8'), { window, Math, setTimeout: fn => { fn(); }, performance: { now: () => clock } });
   return { audio: new window.DesklyOfficeAudio(), calls, advance: ms => { clock += ms; } };
 }
 

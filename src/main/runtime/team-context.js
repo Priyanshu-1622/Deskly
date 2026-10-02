@@ -30,7 +30,7 @@ class TeamContext {
     const projectId = scope === 'project' ? this.projectId(projectRoot) : null;
     if (scope === 'project' && !projectId) throw new Error('Choose a project folder before saving project memory.');
     const existing = this.data.memories.find(m => m.employeeId === employeeId && m.projectId === projectId && m.text === value);
-    if (existing) return existing;
+    if (existing) { if (source === 'founder') { existing.status = 'verified'; existing.source = source; existing.kind = kind; existing.evidence = String(evidence || '').slice(0, 300); existing.updatedAt = new Date().toISOString(); this.save(); } return existing; }
     const note = { id: crypto.randomUUID(), employeeId, projectId, scope, text: value, source,
       kind: ['fact', 'decision', 'preference', 'lesson'].includes(kind) ? kind : 'fact',
       status: source === 'founder' ? 'verified' : 'unverified', evidence: String(evidence || '').slice(0, 300),
@@ -115,6 +115,9 @@ class TeamContext {
     const key = [month, this.projectId(projectRoot) || 'none', employeeId, provider, model].join('|');
     const row = this.data.usage[key] ||= { month, projectId: this.projectId(projectRoot), employeeId, provider, model, calls: 0, input: 0, output: 0, cached: 0 };
     row.calls++; row.input += input; row.output += output; row.cached += cached;
+    const cutoff = new Date(); cutoff.setUTCMonth(cutoff.getUTCMonth() - 12);
+    const oldest = cutoff.toISOString().slice(0, 7);
+    for (const [id, old] of Object.entries(this.data.usage)) if (old.month < oldest) delete this.data.usage[id];
     this.save();
   }
   usage(month = new Date().toISOString().slice(0, 7)) {

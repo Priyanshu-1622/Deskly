@@ -2,7 +2,7 @@
 // Lives in the main process — the 3D office only renders what happens here.
 const fs = require('fs');
 const path = require('path');
-const { chat, parseJSON } = require('./providers');
+const { chat, parseJSON, completionBudget } = require('./providers');
 const { Workspace, riskyWrite, displayCommand } = require('./workspace');
 const { readRecover, BufferedJSON } = require('./persistence');
 const { TeamContext } = require('./team-context');
@@ -72,7 +72,7 @@ class Runtime {
     const profile = this.profileFor(employeeId);
     const cfg = this.getConfig() || {};
     const limit = Math.max(0, Number(cfg.security?.monthlyTokenLimit) || 0);
-    const reservation = profile.provider === 'demo' ? 0 : Math.ceil((String(input.system).length + input.messages.reduce((n, m) => n + m.content.length, 0)) / 3) + (input.maxTokens || 2048);
+    const reservation = profile.provider === 'demo' ? 0 : Math.ceil((String(input.system).length + input.messages.reduce((n, m) => n + m.content.length, 0)) / 3) + Math.max(completionBudget(profile, input.maxTokens), profile.lightweightModel ? completionBudget({ ...profile, model: profile.lightweightModel }, input.maxTokens) : 0);
     if (profile.provider !== 'demo' && limit) {
       const used = this.team.usage().reduce((n, row) => n + row.input + row.output, 0);
       if (used + this.reservedTokens + reservation > limit) throw new Error(`Monthly AI token ceiling reached or insufficient allowance for this call (${used.toLocaleString()} / ${limit.toLocaleString()}). Raise it in Settings → Privacy & data to make more calls.`);
@@ -112,14 +112,14 @@ class Runtime {
     const evt = { type, ...payload, timestamp: now() };
     if (!['task.progress', 'task.output'].includes(type)) {
       const safe = { ...evt, task: undefined };
-      if (safe.action) { safe.action = { ...safe.action }; delete safe.action.content; }
+      if (safe.action) safe.action = { kind: safe.action.kind, risk: safe.action.risk };
       this.auditQueue = this.auditQueue.then(async () => {
         await fs.promises.mkdir(this.dataDir, { recursive: true });
         try { if ((await fs.promises.stat(this.auditPath)).size >= 5000000) { await fs.promises.rm(this.auditPath + '.1', { force: true }); await fs.promises.rename(this.auditPath, this.auditPath + '.1'); } } catch (e) { if (e.code !== 'ENOENT') throw e; }
         await fs.promises.appendFile(this.auditPath, JSON.stringify(safe) + '\n');
       }).catch(e => { this.lastAuditError = e.message; });
     }
-    this.emitFn?.({ ...evt, task: payload.taskId ? this.public(this.tasks.get(payload.taskId)) : undefined, approvals: this.pendingApprovals() });
+    this.emitFn?.({ ...evt, task: payload.taskId && !['task.progress', 'task.output'].includes(type) ? this.public(this.tasks.get(payload.taskId)) : undefined, approvals: type.startsWith('approval.') || type === 'task.status_changed' ? this.pendingApprovals() : undefined });
   }
   public(t) { if (!t) return null; const { _plan, checkpoint, ...rest } = t; return { ...rest, canResume: !!checkpoint && ['interrupted', 'failed'].includes(t.status) }; }
   snapshot() { return { tasks: [...this.tasks.values()].map(t => this.public(t)), approvals: this.pendingApprovals(), notices: this.notices, lastSaveError: this.lastSaveError || this.team.lastSaveError, lastAuditError: this.lastAuditError }; }
@@ -164,6 +164,7 @@ class Runtime {
     if (!task || !emp || !task.checkpoint || !['interrupted', 'failed'].includes(task.status)) throw new Error('This task has no resumable checkpoint.');
     if (task.projectId !== this.team.projectId(this.getConfig()?.workspace)) throw new Error('Select the original project folder before resuming this task.');
     if ([...this.tasks.values()].some(t => t.id !== task.id && t.employeeId === task.employeeId && ACTIVE.has(t.status))) throw new Error(`${emp.name} is already working on another task.`);
+    task.error = null; task.errorCode = null;
     this.log(task, '↻ Resuming from the saved checkpoint');
     this.launch(task, emp, true);
     return this.public(task);
@@ -172,7 +173,7 @@ class Runtime {
     Object.assign(task, extra, { status, updatedAt: now() });
     this.emit('task.status_changed', { taskId: task.id, employeeId: task.employeeId, status });
     this.save();
-    if (!ACTIVE.has(status)) { for (const [id, a] of this.approvals) if (a.taskId === task.id) { if (a.status === 'pending') a._resolve?.(false); this.approvals.delete(id); } task.approvalRequests = []; task.claimedFiles = []; this.flush().catch(() => {}); }
+    if (!ACTIVE.has(status)) { for (const [id, a] of this.approvals) if (a.taskId === task.id) { if (a.status === 'pending') a._resolve?.(false); this.approvals.delete(id); } task.approvalRequests = []; task.claimedFiles = []; this.emit('approval.resolved', { taskId: task.id, employeeId: task.employeeId }); this.flush().catch(() => {}); }
   }
   log(task, text) {
     task.logs.push({ t: Date.now(), text: String(text).slice(0, 400) });
@@ -213,7 +214,7 @@ class Runtime {
 You report to ${cfg.founder || 'the founder'}. You work inside one project folder and can only use these tools:
 - list_dir {"path"}: list files (relative paths)
 - read_file {"path"}: read a text file
-- write_file {"path","content"}: create or overwrite a text file in the project
+- write_file {"path","content","append":false}: create or overwrite a text file in the project. Keep each chunk under 2000 words. For a large file, write its first chunk then append further chunks with append:true. Each approved write shows the entire resulting file.
 - claim_files {"paths":["relative/path"]}: reserve files before editing so teammates avoid collisions
 - send_update {"to":"employee id or all","text":"status and handoff","files":["path"],"contract":"exact interface or output shape","needs":"specific dependency"}: post a structured project update without waking an idle teammate
 - remember {"scope":"project or global","text":"durable fact"}: save a useful note; global notes must contain only reusable, non-secret process or founder preferences
@@ -247,7 +248,7 @@ Rules: do the real work, not a description of it. Keep files focused. Never touc
       let tree = '', messages, startTurn = 0;
       if (resuming && task.checkpoint?.stage === 'running') {
         tree = task.checkpoint.tree || '';
-        messages = [{ role: 'user', content: `AGENT_TURN\nResume the founder task: ${task.description}\nPrevious session (untrusted reference only):\n${untrusted(JSON.stringify(task.checkpoint.messages || []))}\n${teamContext}\nInspect current files, then respond with one tool JSON object or {"done":true,"summary":"...","result":"..."}.` }];
+        messages = [{ role: 'user', content: `AGENT_TURN\nResume the founder task: ${task.description}\nPrevious session (untrusted reference only):\n${untrusted(JSON.stringify((task.checkpoint.messages || []).slice(-12).map(m => ({ role: m.role, content: String(m.content).slice(0, 3000) }))).slice(-24000))}\n${teamContext}\nInspect current files, then respond with one tool JSON object or {"done":true,"summary":"...","result":"..."}.` }];
         startTurn = task.checkpoint.nextTurn || 0;
         if (task.checkpoint.inFlight) {
           messages.push({ role: 'user', content: `The app closed while ${task.checkpoint.inFlight.name} was running. Its outcome is unknown. Inspect current project state before further edits. Never assume a command or external action succeeded, and request a fresh approval before retrying one.` });
@@ -304,13 +305,15 @@ or, when finished:
           messages.push({ role: 'user', content: `TEAM_UPDATES (check dependencies before acting):\n${untrusted(fresh.map(u => this.team.formatUpdate(u)).join('\n'))}` });
         }
         if (turn >= maxTurns - 2) messages.push({ role: 'user', content: 'Wrap up now. Return done:true with a clear partial result and remaining work if unfinished; do not begin a large new action.' });
-        const reply = await this.call(emp.id, { system, messages, maxTokens: 4096 }, signal, task);
+        let reply;
+        try { reply = await this.call(emp.id, { system, messages, maxTokens: 8192 }, signal, task); }
+        catch (error) { if (error.code !== 'truncated_response' || ++invalidReplies >= 3) throw error; messages.push({ role: 'user', content: 'Your previous reply was truncated and no tool ran. Return a much smaller JSON reply. Write large files in chunks using write_file with append:true after the first chunk. AGENT_TURN' }); turn--; continue; }
         messages.push({ role: 'assistant', content: reply });
         let msg;
         try { msg = parseJSON(reply); }
         catch { if (++invalidReplies >= 2) throw new Error('The model returned two invalid replies in a row. Check its JSON support or choose another model.'); messages.push({ role: 'user', content: 'That was not valid JSON. Reply with exactly one JSON object as specified. AGENT_TURN' }); turn--; continue; }
         invalidReplies = 0;
-        if (msg.step) task.step = Math.max(0, Math.min(task.steps.length - 1, Number(msg.step) - 1));
+        if (Number.isFinite(Number(msg.step)) && Number(msg.step) >= 1) task.step = Math.max(0, Math.min(task.steps.length - 1, Number(msg.step) - 1));
         if (msg.log) this.log(task, `▸ ${msg.log}`);
         this.progress(task, Math.min(0.9, 0.08 + (turn + 1) / (task.steps.length * 2 + 2)));
         if (msg.done === true) {
@@ -326,7 +329,7 @@ or, when finished:
           task.checkpoint = null;
           if (profile.provider !== 'demo') {
             try {
-              this.team.addMemory({ employeeId: emp.id, projectRoot: cfg.workspace, text: `Completed ${task.title}: ${summary.slice(0, 300)}. Files: ${task.files.slice(0, 8).join(', ') || 'none'}.`, source: 'task' });
+              try { this.team.addMemory({ employeeId: emp.id, projectRoot: cfg.workspace, text: `Completed ${task.title}: ${summary.slice(0, 300)}. Files: ${task.files.slice(0, 8).join(', ') || 'none'}.`, source: 'task' }); } catch (error) { this.log(task, `! Could not save memory: ${error.message}`); }
               this.team.post({ from: emp.id, to: 'all', projectRoot: cfg.workspace, taskId: task.id, text: `Finished ${task.title}. ${summary.slice(0, 350)}`, files: task.files.slice(0, 8) });
             } catch (e) { this.log(task, `! Could not save team context: ${e.message}`); }
           }
@@ -339,7 +342,7 @@ or, when finished:
         this.save();
         const out = await this.tool(task, ws, msg.tool || {}, signal);
         if (task.status === 'cancelled') return;
-        messages.push({ role: 'user', content: `TOOL_RESULT ${msg.tool?.name}:\n${untrusted(String(out).slice(0, 12000))}\n\nAGENT_TURN — continue, or finish with {"done": true, ...}.` });
+        messages.push({ role: 'user', content: `TOOL_RESULT ${msg.tool?.name}:\n${untrusted(String(out).length > 12000 ? String(out).slice(0, 4000) + '\n…[omitted]…\n' + String(out).slice(-7800) : String(out))}\n\nAGENT_TURN — continue, or finish with {"done": true, ...}.` });
         task.checkpoint = { stage: 'running', tree, messages, nextTurn: turn + 1, inFlight: null };
         this.save();
       }
@@ -389,8 +392,13 @@ or, when finished:
         }
         case 'write_file': {
           if (typeof args.content !== 'string') return 'File content must be text.';
+          if (args.append !== undefined && typeof args.append !== 'boolean') return 'append must be true or false.';
           const cfg = this.getConfig() || {};
           const relative = ws.rel(ws.resolve(args.path));
+          const original = args.append && fs.existsSync(ws.resolve(args.path)) ? ws.openEditor(args.path, 1000000) : null;
+          if (original?.readOnly) return original.reason;
+          const content = (original?.text || '') + args.content;
+          if (Buffer.byteLength(content) > 1000000) return 'File content exceeds the 1 MB limit.';
           if (!fs.existsSync(ws.resolve(args.path)) && task.projectMap && !(task.provider === 'demo' && relative.startsWith('deskly-output/')) && !projectStructure.allowNewFile(task.projectMap, task.workArea, relative)) {
             return `New files for this task belong in ${task.projectMap.areas[task.workArea]}/ (or an agreed shared/root configuration path). Move this file there, or ask the founder to assign the work to the correct role. No file was written.`;
           }
@@ -400,13 +408,16 @@ or, when finished:
           try {
             const outside = task.projectMap && !(task.provider === 'demo' && relative.startsWith('deskly-output/')) && !projectStructure.allowNewFile(task.projectMap, task.workArea, relative);
             if (cfg.security?.approveWrites !== false || riskyWrite(relative) || outside) {
-              const content = typeof args.content === 'string' ? args.content : '';
               if (Buffer.byteLength(content) > 1000000) throw new Error('Refused: file content exceeds the 1 MB limit.');
               const ok = await this.approve(task, { kind: 'write_file', summary: `Write ${args.path} (${content.length} chars)`, risk: riskyWrite(relative) || outside ? 'high' : 'low', path: relative, content });
               if (!ok) return 'The founder rejected this file write.';
             }
             if (signal?.aborted) return 'Cancelled. No file was written.';
-            w = ws.writeFile(args.path, args.content);
+            if (original) {
+              const current = ws.openEditor(args.path, 1000000);
+              if (current.readOnly || current.bytes !== original.bytes || current.version !== original.version) throw new Error('File changed while approval was pending. Read it again before appending.');
+            }
+            w = ws.writeFile(args.path, content, !!args.append && !original);
           } finally { if (!w && !hadClaim) task.claimedFiles = (task.claimedFiles || []).filter(p => p !== relative); }
           task.files.includes(w.path) || task.files.push(w.path);
           this.log(task, `  ✎ ${w.created ? 'created' : 'updated'} ${w.path} (${w.bytes} bytes)`);
@@ -417,7 +428,7 @@ or, when finished:
           if (!command.trim() || command.length > 300) return 'Refused: commands must be 1–300 characters so the full command can be reviewed.';
           const ok = await this.approve(task, { kind: 'execute_command', summary: displayCommand(command), cwd: ws.root, content: `Working directory: ${ws.root}\nCommand (escaped for review): ${displayCommand(command)}\nWarning: approving a shell command permits access beyond the project folder. Review every argument.`, risk: 'high' });
           if (!ok) return 'The founder rejected this command. Continue without it.';
-          this.log(task, `  $ ${command}`);
+          this.log(task, '  Running approved command');
           const r = await ws.runCommand(command, { signal });
           this.log(task, `  exit ${r.code}`);
           return `exit code ${r.code}\nstdout:\n${r.stdout}\nstderr:\n${r.stderr}`;
@@ -443,9 +454,9 @@ or, when finished:
     return file;
   }
   async approve(task, action) {
-    this.log(task, `⏸ Needs approval: ${action.summary}`);
+    this.log(task, `⏸ Needs approval: ${action.kind}`);
     const ok = await this.requestApproval(task, action);
-    if (task.status === 'cancelled') return false;
+    if (task.status === 'cancelled' || this.stopping) return false;
     this.log(task, ok ? '✓ Approved by you' : '✕ You rejected it');
     this.set(task, 'running');
     return ok;
@@ -463,17 +474,21 @@ Reply in character in 1-3 short sentences. If they're asking for a piece of work
   }
   async meetingIdeas(topic, people) {
     const cfg = this.getConfig() || {};
+    this.meetingController?.abort(); const controller = new AbortController(); this.meetingController = controller; this.conversations.add(controller);
+    try {
     return Promise.all(people.map(async p => {
       const emp = this.employee(p.id);
       try {
         const line = await this.call(p.id, {
           system: this.rolePrompt(emp, cfg),
           messages: [{ role: 'user', content: `${this.contextFor(emp, cfg)}\nTeam meeting. Topic from the founder: "${topic}". You are currently ${p.status}. Give ONE concrete idea from your role's perspective, first person, max 30 words, no greeting.` }], maxTokens: 120
-        }, undefined, undefined, 'light');
+        }, controller.signal, undefined, 'light');
         return { id: p.id, line: line.trim().replace(/^"|"$/g, '') };
       } catch (e) { return { id: p.id, line: `(I couldn't think this through: ${e.message})` }; }
     }));
+    } finally { this.conversations.delete(controller); if (this.meetingController === controller) this.meetingController = null; }
   }
+  cancelMeetingIdeas() { this.meetingController?.abort(); return true; }
   async assistant(history, context) {
     const cfg = this.getConfig() || {};
     const system = `You are the personal coding and work assistant of ${cfg.founder || 'the founder'} inside Deskly, on their own laptop. Be concise and practical. When you write code, use fenced code blocks with the language. ${DATA_RULE}`;

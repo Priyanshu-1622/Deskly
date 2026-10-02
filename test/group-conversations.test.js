@@ -20,6 +20,22 @@ function setup(t) {
   return { runtime, cfg, dir, session };
 }
 
+test('partial decision memory failures are reported and discussion deletion persists', async t => {
+  const { runtime, session, dir } = setup(t);
+  runtime.team.addMemory = () => { throw new Error('Memory bucket is full'); };
+  const result = await runtime.groups.decision(session.id, 'Ship the accessible navigation first.');
+  assert.equal(result.memoryFailures.length, 2);
+  assert.ok(result.messages.some(m => m.kind === 'system' && m.text.includes('could not be saved')));
+  await runtime.groups.delete(session.id);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'group-conversations.json'), 'utf8')).length, 0);
+});
+test('a damaged discussion does not discard neighboring valid conversations', async t => {
+  const {runtime,cfg,dir,session}=setup(t);await runtime.groups.writer.flush();
+  const file=path.join(dir,'group-conversations.json'),saved=JSON.parse(fs.readFileSync(file));saved.push({id:'broken',messages:'invalid'});fs.writeFileSync(file,JSON.stringify(saved));
+  const reopened=new Runtime({dataDir:dir,getConfig:()=>cfg,profileFor:()=>({provider:'demo'}),emit:()=>{}});
+  try{assert.equal(reopened.groups.snapshot(session.id).topic,session.topic);assert.equal(reopened.groups.sessions.length,1);assert.ok(fs.readdirSync(dir).some(name=>name.startsWith('group-conversations.json.corrupt-')));}finally{await reopened.shutdown();}
+});
+
 test('posting is free; selected speakers read founder and earlier replies in sequence', async t => {
   const { runtime: r, session: s } = setup(t), calls = [];
   r.call = async (id, input, signal, task, mode) => {

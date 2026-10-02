@@ -5,6 +5,8 @@
       "id": "employee-male",
       "label": "Detailed broad build",
       "body": "male",
+      "sourceIdentity": "caucasian",
+      "outfit": "male_casualsuit01",
       "path": "assets/characters/employee-male.glb",
       "driver": "deskly",
       "rightHand": "wrist.R",
@@ -14,12 +16,14 @@
         "Skin_Deep"
       ],
       "referenceSeatHeight": 0.5,
-      "sha256": "373f7e7397cfc11c2fb2f2998ceb55ebd4774fe1a4ca54cfc781d6c03425ee04"
+      "sha256": "1a5e541bfb3329180e920eba69a6a75df95513b1678de2c0c63f27c0c9fa317b"
     },
     {
       "id": "employee-female",
       "label": "Detailed narrow build",
       "body": "female",
+      "sourceIdentity": "caucasian",
+      "outfit": "female_elegantsuit01",
       "path": "assets/characters/employee-female.glb",
       "driver": "deskly",
       "rightHand": "wrist.R",
@@ -29,7 +33,41 @@
         "Skin_Deep"
       ],
       "referenceSeatHeight": 0.5,
-      "sha256": "c79869bfdaeebba7b4093c236a9c087b76b4376444d31f99efee6f91dd207162"
+      "sha256": "fd9aef9a93fca0821f4c0172134e2a1a1aa3b8dcfca80ea5d7b1d88d92bea803"
+    },
+    {
+      "id": "employee-male-african",
+      "label": "Detailed broad build \u00b7 alternate face and outfit",
+      "body": "male",
+      "sourceIdentity": "african",
+      "outfit": "male_elegantsuit01",
+      "path": "assets/characters/employee-male-african.glb",
+      "driver": "deskly",
+      "rightHand": "wrist.R",
+      "skinMaterials": [
+        "Skin",
+        "Skin_Medium",
+        "Skin_Deep"
+      ],
+      "referenceSeatHeight": 0.5,
+      "sha256": "6ba620fda8145d84ad99af7c8a044092b9a41a44263830cb5b637bad7747ec07"
+    },
+    {
+      "id": "employee-female-asian",
+      "label": "Detailed narrow build \u00b7 alternate face and outfit",
+      "body": "female",
+      "sourceIdentity": "asian",
+      "outfit": "female_casualsuit02",
+      "path": "assets/characters/employee-female-asian.glb",
+      "driver": "deskly",
+      "rightHand": "wrist.R",
+      "skinMaterials": [
+        "Skin",
+        "Skin_Medium",
+        "Skin_Deep"
+      ],
+      "referenceSeatHeight": 0.5,
+      "sha256": "8fadee9df56e13c61fc7a3d3f97cb5f66a511f5ad9eb893ce6433b357f2900ce"
     }
   ]
 }

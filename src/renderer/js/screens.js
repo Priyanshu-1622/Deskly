@@ -33,6 +33,19 @@
     }
     async load() {
       this.info = await DK.appInfo();
+      if (DK.onUpdatesChanged) {
+        this.updateState = await DK.updatesStatus();
+        this.unsubscribeUpdates = DK.onUpdatesChanged(state => {
+          this.updateState = state; this.refreshUpdateStatus?.();
+          if (state.status === 'ready' && !document.querySelector('#update-notice')) {
+            const notice = h('section', { id: 'update-notice', class: 'card amber', style: 'position:fixed;z-index:10000;right:20px;bottom:20px;max-width:400px;padding:20px' },
+              h('h3', {}, `Deskly ${state.version} is ready`), h('p', {}, 'Save your work, then restart to apply the update.'),
+              h('button', { class: 'btn primary', onclick: () => DK.updatesInstall().catch(e => this.flash(e.message)) }, 'Restart to update'),
+              h('button', { class: 'btn', onclick: () => notice.remove() }, 'Later'));
+            document.body.append(notice);
+          }
+        });
+      }
       const r = await DK.configGet();
       this.cfg = r.config; this.keys = r.keys || {}; this.recoveryNotices = r.notices || []; if (this.recoveryNotices.length) this.showRecovery(this.recoveryNotices);
       return this.cfg;
@@ -45,6 +58,7 @@
     show(id) {
       for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
       document.body.dataset.screen = id || 'game';
+      if (!['screen-setup','screen-settings'].includes(id) && this._pv) { this._pv.dispose(); this._pv = null; }
     }
     toast(t, c) { this.app.ui ? this.app.ui.toast(t, c) : this.flash(t); }
     flash(t) { const el = h('div', { class: 'flash' }, t); document.body.append(el); setTimeout(() => el.remove(), 3500); }
@@ -63,9 +77,9 @@
         h('button', { class: 'mbtn ghost', type: 'button', onclick: () => DK.appQuit() }, h('b', {}, 'Quit')));
       s.replaceChildren(
         h('div', { class: 'start-left' },
-          h('div', { class: 'title-masthead' }, h('span', { class: 'tape' }, 'Building open'), h('span', { class: 'label' }, cfg?.company || 'Your next company')), h('div', { class: 'brand title-brand' }, mark(), h('div', {}, h('h1', {}, 'ESKLY'), h('p', {}, 'Your AI company, in a real office.'))),
+          h('div', { class: 'title-masthead' }, h('span', { class: 'tape' }, 'Building open'), h('span', { class: 'label' }, cfg?.company || 'Your next company')), h('div', { class: 'brand title-brand' }, mark(), h('div', {}, h('h1', { 'aria-label': 'Deskly' }, 'ESKLY'), h('p', {}, 'Your AI company, in a real office.'))),
           menu,
-          h('footer', {}, h('span', {}, this.info.version === 'web' ? 'Browser preview' : `v${this.info.version}`), h('span', {}, this.info.encryption ? 'API keys encrypted with your OS keychain' : (DK.native ? 'Secure key storage unavailable — API keys cannot be saved' : 'Keys and real work need the desktop app')),
+          h('footer', {}, h('span', {}, this.info.version === 'web' ? 'Browser preview' : `v${this.info.version}`), h('span', {}, this.info.encryption ? 'API keys encrypted with your OS keychain' : (DK.native ? 'Secure key storage unavailable — on Linux, unlock GNOME Keyring or KWallet; API keys cannot be saved' : 'Keys and real work need the desktop app')),
             h('a', { href: '#', onclick: e => { e.preventDefault(); DK.shellExternal('https://github.com/Priyanshu-1622/Deskly'); } }, 'Open source on GitHub'))),
         h('div', { class: 'start-right' }, this.shiftBoard(cfg))
       );
@@ -138,7 +152,7 @@
           setTimeout(() => a.focus(), 30);
         } else if (step === 1) {
           const path = h('code', { class: 'path' }, draft.workspace || 'No folder chosen yet');
-          body = h('div', { class: 'wbody narrow' }, h('h2', {}, 'Pick a project folder'), h('p', { class: 'lead' }, 'Your team reads and writes files in this folder. Shell commands need your approval, but they can access other locations on your computer.'),
+          body = h('div', { class: 'wbody narrow' }, h('h2', {}, 'Pick a project folder'), h('p', { class: 'lead' }, 'Your team reads and writes files in this folder. Assigning the first task saves deskly.project.json; an empty project gets frontend, backend, shared, docs and operations folders. Shell commands need your approval, but they can access other locations on your computer.'),
             h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: async () => { const p = await DK.workspaceChoose(); if (p) { draft.workspace = p; render(); } } }, draft.workspace ? 'Change folder' : 'Choose folder…')), path,
             h('p', { class: 'note' }, 'Deskly creates deskly.project.json on your first task to record work areas. Start with a fresh folder or a Git repository so changes are easy to review.'));
         } else if (step === 2) {
@@ -278,9 +292,9 @@
             h('span', { class: 'face', style: `background:${departmentColor(e.dept)}` }, initials(e.name)),
             h('span', { class: 'meta' }, h('span', { class: 'dept' }, e.dept), h('b', {}, e.name), h('small', {}, e.role), h('small', { class: 'member-provider' }, `${e.provider && e.provider !== 'demo' ? e.provider : 'Demo mode'}`)),
             h('i', { class: 'dot', title: e.provider && e.provider !== 'demo' ? 'AI connected' : 'Demo mode', style: `background:${e.provider && e.provider !== 'demo' && (this.keys[e.id] || this.pendingKeys[e.id] || e.keyFrom || !(this.providers()[e.provider] || {}).needsKey) ? '#2fbf71' : '#f0a020'}` }))),
-          h('div', { class: 'tadd' }, addSel, h('button', { class: 'btn primary', type: 'button', onclick: () => {
+          h('div', { class: 'tadd' }, addSel, h('button', { class: 'btn primary', type: 'button', disabled: draft.employees.length >= 50, title: draft.employees.length >= 50 ? 'The office supports up to 50 employees' : 'Hire an employee', onclick: () => {
             const e = P().makeEmployee(addSel.value, { name: 'New ' + addSel.value.toLowerCase() });
-            const cap = D[e.dept]?.seats || 10; if (draft.employees.filter(x => x.dept === e.dept).length >= cap) e.dept = 'Engineering';
+            const cap = D[e.dept]?.seats || 10; if (draft.employees.length >= 50) { this.flash('The office supports up to 50 employees.'); return; } if (draft.employees.filter(x => x.dept === e.dept).length >= cap) { e.dept = 'Engineering'; this.flash('That department is full. A spare Engineering desk was selected; you can change the department.'); }
             draft.employees.push(e); sel = e.id; renderList(); renderEdit();
           } }, 'Hire')));
       };
@@ -298,7 +312,7 @@
               h('h3', {}, 'Profile'),
               h('div', { class: 'grid2' },
                 field('Name', h('input', { type: 'text', value: e.name, oninput: ev => { e.name = ev.target.value; renderList(); } })),
-                field('Role', h('select', { onchange: ev => { const r = R[ev.target.value]; Object.assign(e, { role: r.role, workArea: r.workArea, dept: r.dept, scope: r.scope, persona: r.persona, resume: DesklyResumes.forRole(r.role), instructions: r.instructions, tasks: r.tasks.slice() }); renderList(); renderEdit(); } }, ...Object.keys(R).map(r => h('option', { value: r, selected: r === e.role }, r))))),
+                field('Role', h('select', { onchange: ev => { const old=R[e.role],r=R[ev.target.value]; for(const field of ['scope','persona','resume','instructions','tasks','deliverable']) if(e[field]===undefined || (old && JSON.stringify(e[field])===JSON.stringify(old[field]))) e[field]=structuredClone(r[field] ?? (field==='tasks'?[]:'')); Object.assign(e, { role: r.role, workArea: r.workArea, dept: r.dept }); renderList(); renderEdit(); } }, ...Object.keys(R).map(r => h('option', { value: r, selected: r === e.role }, r))))),
               h('div', { class: 'grid2' },
                 field('Department (desk area)', h('select', { onchange: ev => { e.dept = ev.target.value; renderList(); } }, ...Object.keys(D).map(d => h('option', { value: d, selected: d === e.dept }, d)))),
                 field('Job title', h('input', { type: 'text', value: e.role, oninput: ev => { e.role = ev.target.value; renderList(); } }))),
@@ -314,7 +328,9 @@
               h('h3', {}, 'AI brain'), this.aiFields(e, e.id, draft),
               h('div', { class: 'row' },
                 h('button', { class: 'btn ghost', type: 'button', onclick: () => {
-                  draft.employees.forEach(o => { if (o !== e) { o.provider = e.provider; o.model = e.model; o.baseUrl = e.baseUrl; o.keyFrom = this.providers()[e.provider]?.localCli ? undefined : e.id; } });
+                  let owner = e.id; const visited = new Set();
+                  while (!visited.has(owner)) { visited.add(owner); const setup = owner === 'assistant' ? draft.assistant : draft.employees.find(person => person.id === owner); if (!setup?.keyFrom) break; owner = setup.keyFrom; }
+                  draft.employees.forEach(o => { if (o !== e && o.id !== owner) { o.provider = e.provider; o.model = e.model; o.baseUrl = e.baseUrl; o.keyFrom = this.providers()[e.provider]?.localCli ? undefined : owner; } });
                   this.flash(`Everyone now uses ${e.name.split(' ')[0]}'s provider and key.`); renderList();
                 } }, 'Use this AI setup for the whole team'),
                 h('button', { class: 'btn danger', type: 'button', onclick: () => { draft.employees = draft.employees.filter(x => x !== e); sel = draft.employees[0]?.id; renderList(); renderEdit(); } }, 'Remove from team'))),
@@ -350,18 +366,20 @@
       const cam = new T.PerspectiveCamera(26, 320 / 380, 0.1, 20); cam.position.set(0, 1.15, 4.4); cam.lookAt(0, 0.95, 0);
       const floor = new T.Mesh(new T.CircleGeometry(0.6, 32), new T.MeshBasicMaterial({ color: 0x2a3338 })); floor.rotation.x = -Math.PI / 2; sc.add(floor);
       let rig = null, t = 0, alive = true;
-      const set = look => {
+      let rebuildTimer;
+      const rebuild = look => {
         if (rig) { sc.remove(rig.root); if(rig.dispose)rig.dispose();else rig.root.traverse(o => o.geometry?.dispose?.()); }
         const rigLook = P().lookToRig(look || {});
         rig = DesklyHumanAssets.build(rigLook) || Human.build(rigLook); rig.setMode('stand'); sc.add(rig.root);
       };
+      const set = look => { clearTimeout(rebuildTimer); rebuildTimer = setTimeout(() => rebuild(look), 100); };
       const loop = () => {
         if (!alive) return;
         if (!document.hidden && canvas.checkVisibility() && rig) { t += 1 / 60; rig.root.rotation.y = Math.sin(t * 0.5) * 0.7; rig.update(1 / 60, rig.root.rotation.y); r.render(sc, cam); }
         requestAnimationFrame(loop);
       };
       loop();
-      this._pv = { el: h('div', { class: 'pv' }, canvas), set };
+      this._pv = { el: h('div', { class: 'pv' }, canvas), set, dispose: () => { alive = false; clearTimeout(rebuildTimer); rig?.dispose?.(); floor.geometry.dispose(); floor.material.dispose(); r.dispose(); r.forceContextLoss(); } };
       return this._pv;
     }
 
@@ -370,7 +388,7 @@
       const draft = clone(this.cfg); this.pendingKeys = {};
       draft.settings = { ...DEFAULT_SETTINGS, ...(draft.settings || {}) }; draft.security = draft.security || { approveWrites: true };
       const s = $('#screen-settings');
-      const tabs = { general: 'General', team: 'Team & AI keys', memory: 'Memory & usage', assistant: 'Your assistant', controls: 'Controls & display', data: 'Privacy & data' };
+      const tabs = { general: 'General', team: 'Team & AI keys', memory: 'Memory & usage', assistant: 'Your assistant', controls: 'Controls & display', updates: 'Updates', data: 'Privacy & data' };
       let cur = tab;
       const render = () => {
         let body;
@@ -393,12 +411,28 @@
           field(`Mouse sensitivity · ${st.sensitivity.toFixed(2)}×`, h('input', { type: 'range', min: 0.3, max: 2.5, step: 0.05, value: st.sensitivity, oninput: e => { st.sensitivity = +e.target.value; e.target.parentNode.firstChild.textContent = `Mouse sensitivity · ${st.sensitivity.toFixed(2)}×`; } })),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.invertY, onchange: e => { st.invertY = e.target.checked; } }), 'Invert vertical look'),
           field(`Field of view · ${st.fov}°`, h('input', { type: 'range', min: 55, max: 100, step: 1, value: st.fov, oninput: e => { st.fov = +e.target.value; e.target.parentNode.firstChild.textContent = `Field of view · ${st.fov}°`; } })),
-          field('Graphics quality', h('select', { onchange: e => { st.quality = e.target.value; } }, ...[['high', 'High (sharp, needs a decent GPU)'], ['balanced', 'Balanced'], ['low', 'Low (laptops, integrated graphics)']].map(([v, l]) => h('option', { value: v, selected: v === st.quality }, l)))),
+          field('Graphics quality', h('select', { onchange: e => { st.quality = e.target.value; } }, ...[['ultra', 'Ultra (very high resolution)'], ['high', 'High (sharp, needs a decent GPU)'], ['balanced', 'Balanced'], ['low', 'Low (laptops, integrated graphics)']].map(([v, l]) => h('option', { value: v, selected: v === st.quality }, l)))),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.smoothPerformance !== false, onchange: e => { st.smoothPerformance = e.target.checked; } }), 'Automatically balance sharpness for smoother movement'),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.showFps !== false, onchange: e => { st.showFps = e.target.checked; } }), 'Show frame rate'),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.nameTags, onchange: e => { st.nameTags = e.target.checked; } }), 'Show name tags and speech bubbles'),
           h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => DK.appFullscreen() }, 'Toggle full screen (F11)')),
           h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['F', 'Drink what you are holding'], ['R', 'Discard an empty cup'], ['P', 'Photo mode'], ['Tab', 'Operations board'], ['G', 'Office map'], ['B', 'Whiteboards'], ['H / F1', 'Introduction / guided task'], ['C / M', 'Call people / shared meeting'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
+        else if (cur === 'updates') {
+          const status = h('p', { class: 'lead', role: 'status' });
+          const check = h('button', { class: 'btn', onclick: () => DK.updatesCheck().catch(e => this.flash(e.message)) }, 'Check for updates');
+          const install = h('button', { class: 'btn primary', onclick: () => DK.updatesInstall().catch(e => this.flash(e.message)) }, 'Restart to update');
+          this.refreshUpdateStatus = () => {
+            const state = this.updateState || { status: 'unavailable' };
+            const labels = { idle: 'Updates are checked automatically.', checking: 'Checking for updates…', current: 'You have the latest version.', downloading: `Downloading Deskly ${state.version} · ${state.percent}%`, ready: `Deskly ${state.version} is ready to install.`, unavailable: 'Automatic updates are available in the installed Windows app.', error: state.message };
+            status.textContent = labels[state.status] || 'Updates';
+            check.disabled = ['unavailable','checking','downloading','ready'].includes(state.status);
+            install.hidden = state.status !== 'ready';
+          };
+          this.refreshUpdateStatus();
+          body = h('div', { class: 'sbody narrow' }, h('h3', {}, `Deskly ${this.info.version}`), status,
+            h('p', { class: 'note' }, 'The installed Windows app checks GitHub Releases at startup and every six hours, then downloads newer versions in the background. Installation waits for your restart confirmation and will not interrupt active tasks or conversations. Save unsaved editor text and settings first.'),
+            h('div', { class: 'row' }, check, install), h('button', { class: 'btn', onclick: () => DK.shellExternal('https://github.com/Priyanshu-1622/Deskly/releases') }, 'View release notes'));
+        }
         else body = h('div', { class: 'sbody narrow' },
           h('h3', {}, 'Help with a problem'),
           h('p', { class: 'note' }, 'Save a diagnostic report for a bug report. It includes app and system versions, settings and activity counts. It excludes keys, names, project paths, file contents and conversations. Nothing is sent automatically.'),
@@ -411,8 +445,8 @@
             h('button', { class: 'btn', type: 'button', onclick: async () => { await DK.tasksClear(); this.flash('Finished tasks cleared.'); } }, 'Clear finished tasks')),
           h('h3', {}, 'Danger zone'),
           h('button', { class: 'btn danger', type: 'button', onclick: ev => {
-            if (ev.target.dataset.sure) { DK.configReset().then(() => location.reload()); return; }
-            ev.target.dataset.sure = 1; ev.target.textContent = 'Click again to erase settings and keys';
+            if (ev.target.dataset.sure) { DK.configReset().then(reset => { if (reset) location.reload(); }).catch(error => this.flash(error.message)); return; }
+            ev.target.dataset.sure = 1; ev.target.textContent = 'Click again to erase settings and keys'; const button = ev.target; setTimeout(() => { delete button.dataset.sure; button.textContent = 'Reset settings & keys'; }, 4000);
           } }, 'Reset settings & keys'),
           h('button', { class: 'btn danger', type: 'button', onclick: async () => { try { await DK.dataErase(); } catch (e) { this.flash(e.message); } } }, 'Erase all Deskly data'));
         s.replaceChildren(h('div', { class: 'settings' },
@@ -442,7 +476,8 @@
       const refresh = async () => {
         try {
           const [saved, recent, rows] = await Promise.all([selected ? DK.memoryList(selected) : [], DK.teamUpdates(), DK.usageGet()]);
-          notes.replaceChildren(...(saved.length ? saved.slice().reverse().map(m => h('div', { class: 'memory-row' },
+          notes.setAttribute('aria-label', `${saved.filter(note => note.status === 'unverified').length} notes waiting for review`);
+          notes.replaceChildren(h('p', { class: 'note' }, `${saved.filter(note => note.status === 'unverified').length} notes waiting for review. Only verified notes guide AI work.`), ...(saved.length ? saved.slice().reverse().map(m => h('div', { class: 'memory-row' },
             h('span', {}, h('b', {}, `${m.kind || 'fact'} · ${m.status || 'unverified'} · ${m.scope === 'global' ? 'across projects' : 'this project'}`), ' · ', m.text,
               h('small', {}, ` Source: ${m.source || 'unknown'} · ${new Date(m.updatedAt || m.createdAt).toLocaleDateString()}`)),
             h('div', { class: 'row' },
@@ -504,34 +539,39 @@
       const empSel = h('select', { id: 'delegateTo' }, ...app.office.employees.map(e => h('option', { value: e.id }, `${e.name} · ${e.role}`)));
       const delegate = h('input', { type: 'text', id: 'delegateText', placeholder: 'Instruction for the employee…' });
       const setTab = () => { tabName.textContent = (L.file || 'untitled') + (L.dirty ? ' •' : ''); };
-      const loadTree = async () => {
+      let treePath = '.';
+      const loadTree = async (folder, offset = 0) => {
+        if (typeof folder === 'string') treePath = folder;
         try {
-          const list = await DK.workspaceList('.', 3);
-          tree.replaceChildren(...list.map(f => h('button', { type: 'button', class: 'fitem' + (f.dir ? ' dir' : '') + (f.path === L.file ? ' on' : ''), style: `padding-left:${8 + (f.path.split('/').length - 1) * 12}px`, disabled: f.dir, onclick: () => openFile(f.path) }, (f.dir ? '▸ ' : '') + f.path.split('/').pop())));
-          if (!list.length) tree.replaceChildren(h('p', { class: 'note' }, 'The folder is empty. Ask someone to build something!'));
+          const page = DK.workspaceEditorList ? await DK.workspaceEditorList(treePath, offset) : { entries: await DK.workspaceList(treePath, 1), total: 0, next: null }; const list=page.entries;
+          tree.replaceChildren(...list.map(f => h('button', { type: 'button', class: 'fitem' + (f.dir ? ' dir' : '') + (f.path === L.file ? ' on' : ''), style: `padding-left:${8 + (f.path.split('/').length - 1) * 12}px`, onclick: () => f.dir ? loadTree(f.path) : openFile(f.path) }, (f.dir ? '▸ ' : '') + f.path.split('/').pop())));
+          if(page.total>400) tree.append(h('p',{class:'note'},`Showing ${offset+1}–${offset+list.length} of ${page.total} entries.`)); if(offset>0) tree.append(h('button',{class:'mini',type:'button',onclick:()=>loadTree(treePath,Math.max(0,offset-400))},'Previous page')); if(page.next!==null) tree.append(h('button',{class:'mini',type:'button',onclick:()=>loadTree(treePath,page.next)},'Next page'));
+          if (treePath !== '.') tree.prepend(h('button', { type: 'button', class: 'fitem dir', onclick: () => loadTree(treePath.includes('/') ? treePath.slice(0, treePath.lastIndexOf('/')) : '.') }, '↑ Parent folder · ' + treePath));
+          if (!list.length) tree.append(h('p', { class: 'note' }, 'The folder is empty. Ask someone to build something!'));
         } catch (e) { tree.replaceChildren(h('p', { class: 'note' }, e.message)); }
       };
       const openFile = async p => {
         if (L.dirty && !confirmLeave()) return;
-        try { L.text = await DK.workspaceRead(p); L.file = p; L.dirty = false; ed.value = L.text; setTab(); loadTree(); } catch (e) { this.flash(e.message); }
+        try { const file = await DK.workspaceEditorRead(p); L.text = file.text; L.version = file.version; L.readOnly = file.readOnly; L.file = p; L.dirty = false; ed.value = L.text; ed.readOnly = L.readOnly; if (file.reason) this.flash(file.reason); setTab(); loadTree(); } catch (e) { this.flash(e.message); }
       };
       let warned = false;
       const confirmLeave = () => { if (warned) return true; warned = true; this.flash('Unsaved changes — click again to discard them.'); setTimeout(() => { warned = false; }, 3000); return false; };
       const save = async () => {
         let p = L.file;
-        if (!p) { p = (prompt ? null : null) || `notes/${new Date().toISOString().slice(0, 10)}-note.md`; }
-        try { await DK.workspaceWrite(p, ed.value); L.file = p; L.dirty = false; setTab(); loadTree(); this.flash(`Saved ${p}`); } catch (e) { this.flash(e.message); }
+        if (L.readOnly) { this.flash('This is a read-only preview.'); return; }
+        if (!p) p = `notes/${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomUUID().slice(0, 8)}-note.md`;
+        try { const file = await DK.workspaceEditorSave(p, ed.value, L.version || null); L.version = file.version; L.text = file.text; ed.value = L.text; L.file = p; L.dirty = false; setTab(); loadTree(); this.flash(`Saved ${p}`); } catch (e) { this.flash(e.message); }
       };
       ed.addEventListener('input', () => { L.dirty = true; L.text = ed.value; setTab(); });
       ed.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
-        if (e.key === 'Tab') { e.preventDefault(); const a = ed.selectionStart; ed.setRangeText('  ', a, ed.selectionEnd, 'end'); L.dirty = true; setTab(); }
+        if (e.key === 'Tab' && !ed.readOnly) { e.preventDefault(); const a = ed.selectionStart; ed.setRangeText('  ', a, ed.selectionEnd, 'end'); L.dirty = true; setTab(); }
       });
       const renderChat = () => {
         chatLog.replaceChildren(...L.chat.map(m => {
           if (m.role === 'user') return h('div', { class: 'me' }, m.content);
           const el = h('div', { class: 'them md', markdown: m.content });
-          el.querySelectorAll('pre').forEach(pre => pre.append(h('button', { class: 'ins', type: 'button', onclick: () => { const a = ed.selectionStart; ed.setRangeText(pre.innerText.replace(/Insert$/, '').trimEnd() + '\n', a, ed.selectionEnd, 'end'); L.dirty = true; setTab(); ed.focus(); } }, 'Insert')));
+          el.querySelectorAll('pre').forEach(pre => pre.append(h('button', { class: 'ins', type: 'button', onclick: () => { if (ed.readOnly) return; const a = ed.selectionStart; ed.setRangeText(pre.innerText.replace(/Insert$/, '').trimEnd() + '\n', a, ed.selectionEnd, 'end'); L.dirty = true; setTab(); ed.focus(); } }, 'Insert')));
           return el;
         }));
         chatLog.scrollTop = 1e6;
@@ -543,8 +583,8 @@
         try {
           const sel = ed.value.slice(ed.selectionStart, ed.selectionEnd);
           const ctx = L.file ? `File: ${L.file}\n${sel ? 'Selected:\n' + sel + '\n\nWhole file:\n' : ''}${ed.value}` : '';
-          const r = await DK.assistantChat(L.chat, ctx); L.chat.push({ role: 'assistant', content: r });
-        } catch (e) { L.chat.push({ role: 'assistant', content: '⚠ ' + e.message }); }
+          const r = await DK.assistantChat(DesklyRuntime.historyForIPC(L.chat), ctx.slice(0, 20000)); L.chat.push({ role: 'assistant', content: r });
+        } catch (e) { L.chat.pop(); ask.value = q; this.flash(e.message); }
         renderChat();
       };
       ask.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
@@ -567,16 +607,16 @@
         h('div', { class: 'lgrid' },
           h('div', { class: 'lcol' }, h('div', { class: 'lhead' }, 'Project', h('button', { class: 'mini', type: 'button', title: 'Refresh', onclick: loadTree }, '↻')), tree,
             h('div', { class: 'lhead' }, 'Team'), team),
-          h('div', { class: 'lcol main' }, h('div', { class: 'lhead' }, tabName, h('button', { class: 'mini', type: 'button', onclick: () => { L.file = null; L.text = ''; ed.value = ''; L.dirty = false; setTab(); } }, 'New'), h('button', { class: 'mini', type: 'button', onclick: save }, 'Save · Ctrl+S')), ed,
+          h('div', { class: 'lcol main' }, h('div', { class: 'lhead' }, tabName, h('button', { class: 'mini', type: 'button', onclick: () => { if (L.dirty && !confirmLeave()) return; L.version = null; L.readOnly = false; ed.readOnly = false; L.file = null; L.text = ''; ed.value = ''; L.dirty = false; setTab(); } }, 'New'), h('button', { class: 'mini', type: 'button', onclick: save }, 'Save · Ctrl+S')), ed,
             h('div', { class: 'lhead' }, 'Terminal'), termOut, termIn),
           h('div', { class: 'lcol' }, h('div', { class: 'lhead' }, 'Assistant'), chatLog, ask, h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: send }, 'Ask')),
             h('div', { class: 'lwork-order slip' }, h('div', { class: 'lhead' }, 'Work order · for the team'), empSel, delegate,
-            h('button', { class: 'btn', type: 'button', onclick: () => {
+            h('button', { class: 'btn', type: 'button', onclick: async () => {
               const e = app.office.byId(empSel.value); const d = delegate.value.trim(); if (!e || !d) return;
-              app.runtime.create({ employee: e, description: d + (L.file ? `\n(Related file: ${L.file})` : '') }); delegate.value = '';
+              const created = await app.runtime.create({ employee: e, description: (d + (L.file ? `\n(Related file: ${L.file})` : '')).slice(0, 5000) }); if (!created) return; delegate.value = '';
               this.flash(`Sent to ${e.name}. They're heading to their desk.`); e.clear(); e.goDesk();
             } }, 'Send as task'))))));
-      ed.value = L.text; setTab(); renderChat(); termOut.textContent = L.term.join('\n');
+      ed.value = L.text; ed.readOnly = !!L.readOnly; setTab(); renderChat(); termOut.textContent = L.term.join('\n');
       loadTree(); if (openPath) openFile(openPath);
       this.show('screen-laptop');
       setTimeout(() => ed.focus(), 30);

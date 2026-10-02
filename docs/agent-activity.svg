@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 225" role="img" aria-labelledby="title desc">
+<title id="title">AI runs when there is work to do</title><desc id="desc">Office movement and idle employees make no AI calls. Assigned tasks and requested conversations use the selected connection. Verified project memory supports future tasks. No cost savings percentage is implied.</desc>
+<style>.step{animation:activity 5s ease-in-out infinite}@keyframes activity{0%,100%{opacity:.4}50%{opacity:1}}@media(prefers-reduced-motion:reduce){.step{animation:none}}</style>
+<rect width="960" height="225" rx="12" fill="#111417"/>
+<g font-family="Segoe UI,Arial,sans-serif"><text x="28" y="38" fill="#f4efe3" font-size="20" font-weight="700">A LIVING OFFICE. INTENTIONAL AI CALLS.</text>
+<g fill="#1b2225" stroke="#46524a"><rect x="28" y="62" width="280" height="130" rx="6"/><rect x="340" y="62" width="280" height="130" rx="6"/><rect x="652" y="62" width="280" height="130" rx="6"/></g>
+<g fill="#a5aaa6" font-size="12"><text x="48" y="87">OFFICE LIFE</text><text x="360" y="87">REQUESTED AI WORK</text><text x="672" y="87">VERIFIED MEMORY</text></g>
+<g font-size="21" font-weight="700"><text x="48" y="121" fill="#8cb896">No AI calls</text><text x="360" y="121" fill="#f2c230">Your selected connection</text><text x="672" y="121" fill="#8fb8d3">Context for next time</text></g>
+<g fill="#b7beb8" font-size="13"><text x="48" y="149">Walking · sitting · office shifts</text><text x="360" y="149">Tasks · replies · selected speakers</text><text x="672" y="149">Project facts · approved decisions</text><text x="48" y="171">The simulation keeps moving locally.</text><text x="360" y="171">Provider usage and token ceilings.</text><text x="672" y="171">Verified notes enter task prompts.</text></g>
+<g class="step" stroke="#f2c230" fill="none" stroke-width="2"><path d="M314 122h20m-6-6 6 6-6 6"/><path d="M626 122h20m-6-6 6 6-6 6"/><path d="M360 183h235"/></g></g></svg>

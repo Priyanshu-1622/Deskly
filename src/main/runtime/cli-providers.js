@@ -21,7 +21,13 @@ function commandFor(profile) {
 }
 
 function resolveExecutable(command) {
-  if (process.platform !== 'win32' || !command.endsWith('.cmd')) return command;
+  if (process.platform !== 'win32') return command;
+  if (command === 'codex') {
+    for (const directory of (process.env.PATH || '').split(path.delimiter)) if (directory && fs.existsSync(path.join(directory, 'codex.exe'))) return path.join(directory, 'codex.exe');
+    for (const directory of (process.env.PATH || '').split(path.delimiter)) if (directory && fs.existsSync(path.join(directory, 'codex.cmd'))) return path.join(directory, 'codex.cmd');
+    return command;
+  }
+  if (!command.endsWith('.cmd')) return command;
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {
     if (!directory) continue;
     const shim = path.join(directory, command);

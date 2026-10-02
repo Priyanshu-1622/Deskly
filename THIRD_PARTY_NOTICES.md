@@ -37,3 +37,7 @@ The renderer currently uses Three.js **r147 / npm 0.147.0**. The matching global
 | `BufferGeometryUtils.js` | `4067811f8e298eab9c49c981f3f3b7db322df21ad523b6b2c26488158cc0cb24` |
 | `GLTFLoader.js` | `b2edda923572c73e6b30b139756d182c87e2c34d022845c6e067a9a0a9544e01` |
 | `three.min.js` | `f34446bf875b5fb0dcd93819ffe1d9e182d46634ee855f5d904c6c4ac7cdbc95` |
+
+## Desktop update dependency
+
+Automatic Windows updates use electron-updater 6.8.9 (MIT), from electron-userland/electron-builder. Dependency license files are included in packaged node_modules.

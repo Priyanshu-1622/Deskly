@@ -16,7 +16,10 @@ function valid(data) {
 class GroupConversations {
   constructor(runtime) {
     this.runtime = runtime; this.controllers = new Map(); this.runs = new Set();
-    this.sessions = readRecover(path.join(runtime.dataDir, 'group-conversations.json'), () => [], valid, runtime.notices);
+    this.sessions = readRecover(path.join(runtime.dataDir, 'group-conversations.json'), () => [], Array.isArray, runtime.notices);
+    const damaged = this.sessions.filter(session => !valid([session]));
+    if (damaged.length) { try { require('node:fs').writeFileSync(path.join(runtime.dataDir, `group-conversations.json.corrupt-${Date.now()}`), JSON.stringify(damaged)); } catch { runtime.notices.push('Damaged discussion records remain in the original archive; check file permissions.'); } runtime.notices.push(`${damaged.length} damaged discussion records were preserved separately; other conversations were recovered.`); }
+    this.sessions = this.sessions.filter(session => valid([session])).slice(-200);
     this.writer = new BufferedJSON(path.join(runtime.dataDir, 'group-conversations.json'), () => this.sessions, e => { runtime.lastSaveError = e.message; });
     for (const session of this.sessions) if (session.status === 'running') {
       session.status = 'idle'; session.speakerId = null;
@@ -34,7 +37,7 @@ class GroupConversations {
   snapshot(id) { return copy(this.get(id)); }
   create(room, topic, ids) {
     if (!rooms.has(room) || typeof topic !== 'string' || topic.length > 500 || !Array.isArray(ids) || !ids.length || ids.length > 50 || new Set(ids).size !== ids.length) throw new Error('Invalid discussion participants or topic.');
-    if(this.sessions.length>=200)throw new Error('Discussion archive is full (200 conversations).');
+    if(this.sessions.length>=200)throw new Error('Discussion archive is full (200 conversations). Delete an old saved discussion to make room.');
     const participants=ids.map(id=>{const employee=this.runtime.employee(id);if(!employee)throw new Error('Unknown employee');return{id:employee.id,name:employee.name,role:employee.role};});
     const session={id:uid(),room,topic:topic.trim()||'Group conversation',projectId:this.project(),participants,messages:[],status:'idle',speakerId:null,createdAt:stamp(),updatedAt:stamp()};
     this.sessions.push(session);this.changed(session);return copy(session);
@@ -88,6 +91,7 @@ class GroupConversations {
   }
   cancel(id) { const session=this.get(id);this.controllers.get(id)?.abort();return copy(session); }
   async end(id) { const session=this.get(id);this.controllers.get(id)?.abort();session.status='ended';this.changed(session);await this.writer.flush();return copy(session); }
+  async delete(id) { const session = this.get(id); if (session.status === 'running') throw new Error('Stop this discussion before deleting it.'); this.sessions = this.sessions.filter(s => s !== session); await this.writer.flush(); this.runtime.emit('group.deleted', { groupId: id }); return true; }
   async decision(id,text) {
     const session=this.get(id),cfg=this.runtime.getConfig()||{};
     if(session.status!=='idle')throw new Error('Finish the discussion round before saving a shared decision.');
@@ -101,7 +105,7 @@ class GroupConversations {
       catch(error){failures.push(p.name+': '+error.message);}
     }
     if(failures.length)this.append(session,'system','Deskly','Some employee memories could not be saved: '+failures.join('; '));
-    await Promise.all([this.writer.flush(),this.runtime.team.flush()]);return copy(session);
+    await Promise.all([this.writer.flush(),this.runtime.team.flush()]);return { ...copy(session), memoryFailures: failures };
   }
   async shutdown(){for(const controller of this.controllers.values())controller.abort();await Promise.allSettled([...this.runs]);await this.writer.flush();}
 }

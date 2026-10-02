@@ -41,7 +41,9 @@
     group.userData.skylights=skylights;group.userData.stairwells=stairwells;world.scene.add(group);return group;
   }
   async function trees(world,base) {
-    const models=await Promise.all(['tree_small_02','fir_sapling'].map(id=>new T.GLTFLoader().loadAsync('assets/models/'+id+'/'+id+'-game.gltf')));
+    const ids=['tree_small_02','fir_sapling'],detail=await fetch('assets/tree-lods.json').then(r=>r.json());
+    const models=await Promise.all(ids.map(id=>new T.GLTFLoader().loadAsync('assets/models/'+id+'/'+id+'-game.gltf')));
+    models.forEach((asset,i)=>asset.scene.traverse(mesh=>{if(!mesh.isMesh)return;const ref=asset.parser.associations.get(mesh),levels=detail[ids[i]]?.[ref?.meshes]?.[ref?.primitives];if(!levels)return;mesh.geometry.treeDetails=levels.map(encoded=>{const raw=atob(encoded),bytes=new Uint8Array(raw.length);for(let j=0;j<raw.length;j++)bytes[j]=raw.charCodeAt(j);const g=new T.BufferGeometry();for(const [name,attribute]of Object.entries(mesh.geometry.attributes))g.setAttribute(name,attribute);g.setIndex(new T.BufferAttribute(new Uint32Array(bytes.buffer),1));return g;});}));
     const group=new T.Group();group.name='Authored_Outdoor_Trees';
     treePositions.forEach(([x,z],i)=>{
       const source=i%5===0?models[1].scene.children[i%3]:models[0].scene;

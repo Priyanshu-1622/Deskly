@@ -129,6 +129,13 @@
       "md5": "3b07264467a1724f443a60e1105a8bed",
       "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fir_sapling/fir_sapling_1k.gltf",
       "derived": true
+    },
+    {
+      "path": "tree-lods.json",
+      "bytes": 568035,
+      "md5": "b198a8aafba2cb07dd2e6251d635c6a0",
+      "source": "Existing CC0 tree game meshes; tools/build-tree-lods.mjs",
+      "derived": true
     }
   ]
 }

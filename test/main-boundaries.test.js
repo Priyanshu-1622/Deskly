@@ -14,6 +14,7 @@ async function mainHarness(options = {}) {
   const initial = { workspace: project, founder: 'Test', company: 'Test', employees: [{ id: 'dev', name: 'Dev', role: 'Developer', provider: 'openai' }], assistant: { provider: 'openai' }, security: { approveWrites: false } };
   const storage = new Store(data, safe); storage.saveConfig(initial); storage.setSecret('dev', 'original-key', initial.employees[0]); storage.setSecret('assistant', 'shared-key', initial.assistant);
   if (options.corruptTeam) { fs.writeFileSync(path.join(data, 'team-context.json'), '{'); fs.writeFileSync(path.join(data, 'team-context.json.bak'), 'broken'); }
+  if (options.erase) { for (const name of ['group-conversations.json', 'group-conversations.json.bak', 'group-conversations.json.corrupt-old', 'group-conversations.json.42.tmp']) fs.writeFileSync(path.join(data, name), 'private conversation'); fs.writeFileSync(path.join(data, 'keep.txt'), 'untouched'); fs.writeFileSync(path.join(data, 'erase-on-start'), 'confirmed'); }
   const app = new EventEmitter(); let stopped = false; app.getPath = () => data; app.getVersion = () => 'test'; app.isReady = () => true; app.requestSingleInstanceLock = () => options.lock !== false; app.whenReady = () => Promise.resolve(); app.quit = () => { const event = { prevented: false, preventDefault() { this.prevented = true; } }; app.emit('before-quit', event); if (!event.prevented) stopped = true; }; app.relaunch = () => {};
   let window;
   class BrowserWindow extends EventEmitter {
@@ -22,7 +23,7 @@ async function mainHarness(options = {}) {
     static getAllWindows() { return [window]; }
   }
   const handlers = new Map(), errors = [], dialog = { showErrorBox: (...a) => errors.push(a), showOpenDialog: async () => ({ canceled: false, filePaths: [project] }) };
-  const session = { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  const session = { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, async clearStorageData() {}, async clearCache() {} } };
   const electron = { app, BrowserWindow, ipcMain: { handle: (ch, fn) => handlers.set(ch, fn) }, dialog, shell: {}, safeStorage: safe, Menu: { buildFromTemplate: x => x, setApplicationMenu() {} }, session, protocol: { registerSchemesAsPrivileged() {}, handle() {} }, net: {}, nativeTheme: {} };
   const mainPath = path.resolve(__dirname, '../src/main/main.js'), nativeRequire = createRequire(mainPath);
   const context = { require: name => name === 'electron' ? electron : nativeRequire(name), __dirname: path.dirname(mainPath), process: { platform: process.platform, argv: [], on() {} }, URL, Response, AbortController, console };
@@ -30,8 +31,21 @@ async function mainHarness(options = {}) {
   for (let i = 0; i < 50 && !handlers.size; i++) await pause(5);
   assert.equal(errors.length, 0);
   const call = (ch, ...args) => handlers.get(ch)({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, ...args);
-  return { call, root, project, app, dialog, initial, stopped: () => stopped, window, errors, handlers };
+  return { call, root, data, project, app, dialog, initial, stopped: () => stopped, window, errors, handlers };
 }
+test('erase removes discussion persistence siblings and leaves unrelated files intact', async () => {
+  const harness = await mainHarness({ erase: true });
+  for (const name of fs.readdirSync(harness.data).filter(name => name.startsWith('group-conversations'))) { assert.equal(name, 'group-conversations.json'); assert.deepEqual(JSON.parse(fs.readFileSync(path.join(harness.data, name))), []); }
+  assert.equal(fs.readFileSync(path.join(harness.data, 'keep.txt'), 'utf8'), 'untouched');
+  assert.equal(fs.existsSync(path.join(harness.data, 'erase-on-start')), false); harness.app.quit();
+});
+test('missing project does not block unrelated settings or confirmed data erase', async () => {
+  const harness = await mainHarness(); fs.rmdirSync(harness.project);
+  assert.equal((await harness.call('config:save', { ...harness.initial, settings: { quality: 'low' } })).ok, true);
+  harness.dialog.showMessageBox = async () => ({ response: 1 });
+  assert.equal((await harness.call('data:erase')).value, true);
+  assert.equal(fs.existsSync(path.join(harness.data, 'erase-on-start')), true);
+});
 test('full IPC settings/test flow cannot redirect an existing key; safe unsaved reuse works', async t => {
   const harness = await mainHarness(), requests = [];
   t.mock.method(global, 'fetch', async (url, options) => { requests.push({ url, headers: options.headers }); return new Response(JSON.stringify({ choices: [{ message: { content: 'ready' } }] })); });
