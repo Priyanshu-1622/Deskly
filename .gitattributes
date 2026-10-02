@@ -1,0 +1,5 @@
+# Imported models are checksum-verified against their original source bytes.
+# glTF is JSON, but converting its line endings changes its recorded size/hash.
+*.gltf -text
+*.glb -text
+*.bin -text
