@@ -119,19 +119,22 @@ async function main() {
     console.log(JSON.stringify({releasePreparation:report,errors},null,2));if(errors.length)throw Error('Release preparation renderer errors');return;
   }
   if(process.env.DESKLY_README_SHOTS==='1'){
-    await send('Emulation.setDeviceMetricsOverride',{width:1920,height:1080,deviceScaleFactor:1,mobile:false});
+    await send('Emulation.setDeviceMetricsOverride',{width:1920,height:process.env.DESKLY_MEETING_SHOT==='1'?1200:1080,deviceScaleFactor:1,mobile:false});
     await evaluate(`(async()=>{const a=window.__deskly,c=(await DK.configGet()).config;c.founder='Alex Rivera';c.company='Deskly Studio';c.employees=DesklyPresets.defaultTeam().map(e=>({...e,provider:'demo'}));await DK.configSave(c);a.screens.cfg=c;await document.fonts.ready;a.screens.start();})()`);
     const shot=async name=>{await delay(350);const {data}=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});fs.writeFileSync(path.join(root,'docs/screenshots',name+'.png'),Buffer.from(data,'base64'));};
-    await shot('front-desk');
-    await evaluate(`window.__deskly.screens.openSettings('team')`);await shot('team-and-providers');
+    if(process.env.DESKLY_MEETING_SHOT!=='1'){
+      await shot('front-desk');
+      await evaluate(`window.__deskly.screens.openSettings('team')`);await shot('team-and-providers');
+    }
     await evaluate(`(()=>{const a=window.__deskly;a.refreshClock=()=>{const c=DesklyOfficeTime.info(new Date('2026-10-02T06:30:00Z'),'Asia/Kolkata');a.clockInfo=c;a.world.setTime(c);return c;};a.enterOffice();a.ui.close();a.playing=false;a.refreshClock();a.office.arrivals=[];for(const e of a.office.employees){e.clear();e.errand=null;e.spawnAt(e.seat.p[0],e.seat.p[2],0);e.posture='sit';e.sitSeat=e.seat;}a.office.callMeeting('Boardroom',a.office.employees,'Dashboard planning');a.player.pos.set(11.2,0,32.2);a.camera.position.set(11.2,1.5,32.2);a.camera.lookAt(16,1.4,32.2);a.ui.meetingLive();})()`);
     await delay(6500);
-    await evaluate(`(()=>{const a=window.__deskly;for(let i=0;i<3000;i++){for(const e of a.office.employees)e.update(.05);if(a.office.meetingArrived()===15)break;}if(a.office.meetingArrived()!==15)throw Error('README meeting did not gather everyone');for(const e of a.office.employees)e.rig.update(.05,e.yaw);a.renderer.render(a.world.scene,a.camera);a.ui.onRender?.();})()`);
+    await evaluate(`(()=>{const a=window.__deskly;for(let i=0;i<3000;i++){a.time+=.05;for(const e of a.office.employees)e.update(.05);a.world.update(.05,[a.player.pos,...a.office.employees.filter(e=>e.present).map(e=>e.pos)]);if(a.office.meetingArrived()===15)break;}if(a.office.meetingArrived()!==15)throw Error('README meeting did not gather everyone: '+JSON.stringify(a.office.employees.filter(e=>!e.arrivedMeeting).map(e=>({name:e.name,pos:e.pos,activity:e.activity,cur:e.cur?.type,queued:e.q.map(q=>q.type),present:e.present}))));for(const e of a.office.employees)e.rig.update(.05,e.yaw);a.renderer.render(a.world.scene,a.camera);a.ui.onRender?.();})()`);
     for(let i=0;i<60;i++){if(await evaluate('!!window.__deskly.office.meeting.groupSessionId'))break;await delay(100);}
-    await evaluate(`(async()=>{const a=window.__deskly,m=a.office.meeting;await DK.groupSend(m.groupSessionId,'Let’s plan a shared dashboard. What should we build first, and how should frontend and backend connect?',m.people.slice(0,2).map(e=>e.id));a.ui.close();a.ui.meetingLive();})()`);
-    for(let i=0;i<60;i++){if(await evaluate('document.querySelectorAll(".group-message").length===3'))break;await delay(100);}
-    await shot('shared-discussion');
-    console.log(JSON.stringify({readmeScreenshots:['front-desk','team-and-providers','shared-discussion'],errors},null,2));if(errors.length)throw Error('README screenshot renderer errors');return;
+    await evaluate(`(async()=>{const a=window.__deskly,m=a.office.meeting;await DK.groupSend(m.groupSessionId,'Let’s plan a shared dashboard. What should we build first, and how should frontend and backend connect?',m.people.slice(0,3).map(e=>e.id));a.ui.close();a.ui.meetingLive();})()`);
+    for(let i=0;i<60;i++){if(await evaluate('document.querySelectorAll(".group-message.employee").length===3'))break;await delay(100);}
+    await evaluate(`(()=>{if(document.querySelectorAll('.group-message.employee').length!==3)throw Error('Three employee replies missing from screenshot');const body=document.querySelector('#panel .body'),transcript=document.querySelector('.group-transcript');body.scrollTop+=transcript.getBoundingClientRect().top-body.getBoundingClientRect().top-180;transcript.scrollTop=0;window.__deskly.renderer.render(window.__deskly.world.scene,window.__deskly.camera);})()`);
+    await shot('meeting-conversation');
+    console.log(JSON.stringify({readmeScreenshots:process.env.DESKLY_MEETING_SHOT==='1'?['meeting-conversation']:['front-desk','team-and-providers','meeting-conversation'],errors},null,2));if(errors.length)throw Error('README screenshot renderer errors');return;
   }
   if(process.env.DESKLY_GROUP_CHECK==='1'){
     const report=await evaluate(`(async()=>{

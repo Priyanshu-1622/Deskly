@@ -29,6 +29,11 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
   <br><sub>Call the whole team to the boardroom, take your seat, and lead the meeting.</sub>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/meeting-conversation.png" alt="Current boardroom meeting with a shared message and visible replies from Aarav, Lena and Kenji" width="100%">
+  <br><sub>One conversation for the room, with multiple employee replies visible together. Choose who replies and save shared decisions. This capture uses actual demo-mode replies; selected speakers reply in sequence.</sub>
+</p>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/sky-sunset.png" alt="Fresh sunset view of the single-floor office, trees and courtyard" width="100%"></td>
@@ -36,11 +41,6 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
   </tr>
   <tr><td><b>A changing office day.</b> Regional time drives sun, clouds, sunset and night.</td><td><b>Your private workspace.</b> Use the laptop, whiteboard, coffee station and briefing area.</td></tr>
 </table>
-
-<p align="center">
-  <img src="docs/screenshots/shared-discussion.png" alt="Current shared meeting conversation with participant selection and attributed demo replies" width="100%">
-  <br><sub>One conversation for the room. Select who replies, keep shared history, and save confirmed decisions. This screenshot uses demo replies.</sub>
-</p>
 
 <details>
   <summary>See the redesigned menu and team settings</summary>
