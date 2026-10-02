@@ -6,7 +6,7 @@ Deskly includes vendored Three.js code in `src/renderer/vendor/`:
 - `GLTFLoader.js`
 - `BufferGeometryUtils.js`
 
-Three.js is copyright the Three.js authors and is licensed under the MIT License. Its [license and source](https://github.com/mrdoob/three.js/blob/master/LICENSE) remain with their original authors. Deskly's generated office model is built from the source in `tools/build_office.py`.
+Three.js is copyright the Three.js authors and is licensed under the MIT License. Its original r147 license is bundled at `src/renderer/vendor/LICENSE-three.txt`; [license and source](https://github.com/mrdoob/three.js/blob/r147/LICENSE) remain with their original authors. Deskly's generated office model is built from the source in `tools/build_office.py`.
 
 ## Office surface textures
 
@@ -23,8 +23,6 @@ The photographed diffuse, OpenGL normal, and roughness maps in `src/renderer/ass
 | Rough Linen | Rico Cilliers, colormass | https://polyhaven.com/a/rough_linen |
 
 The compact indoor reflection image used for glass and metal is a resized version of [Small Empty Room 3](https://polyhaven.com/a/small_empty_room_3) by Sergej Majboroda, also CC0 from Poly Haven.
-
-## Vendored library verification
 
 ## Front Desk interface fonts
 

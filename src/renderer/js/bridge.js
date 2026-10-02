@@ -91,6 +91,7 @@
     usageGet: async () => [],
     auditList: async () => audit.filter(e => !['task.progress', 'task.output'].includes(e.type)).map(({ task, approvals, ...e }) => e),
     auditExport: async () => null,
+    diagnosticsExport: async () => { throw Error('Diagnostic reports are available in the desktop app.'); },
     employeeReply: async (id, ctx) => `(demo) I'm ${ctx}. In the desktop app with an API key I'd give you a real answer.`,
     meetingIdeas: async (topic, people) => people.map(p => ({ id: p.id, line: `(demo) From ${p.role}: I'd look at how "${topic}" changes my current work.` })),
     groupList: async () => groups.filter(s => s.project === (cfg()?.workspace || null)).map(pub).reverse(),

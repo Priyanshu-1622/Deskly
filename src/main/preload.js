@@ -10,7 +10,7 @@ const api = {};
 for (const ch of ['app:info', 'config:get', 'config:save', 'config:reset', 'data:erase', 'secret:set', 'provider:test', 'workspace:choose', 'workspace:ignore-map', 'workspace:list',
   'workspace:read', 'workspace:write', 'workspace:open', 'terminal:run', 'tasks:snapshot', 'tasks:create', 'tasks:resume', 'tasks:cancel', 'tasks:clear',
   'tasks:reviewed', 'approval:respond', 'memory:list', 'memory:add', 'memory:update', 'memory:delete', 'team:updates', 'usage:get', 'audit:list', 'audit:export', 'employee:reply', 'meeting:ideas', 'assistant:chat', 'shell:external',
-  'group:list','group:start','group:get','group:send','group:cancel','group:end','group:decision', 'app:fullscreen', 'app:quit']) {
+  'group:list','group:start','group:get','group:send','group:cancel','group:end','group:decision','diagnostics:export', 'app:fullscreen', 'app:quit']) {
   const name = ch.replace(/[:](\w)/, (_, c) => c.toUpperCase());       // "config:get" -> "configGet"
   api[name] = (...a) => call(ch, ...a);
 }

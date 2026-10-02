@@ -51,6 +51,7 @@ function config(value) {
 }
 const NO_ARGS = new Set(['app:info', 'config:get', 'config:reset', 'data:erase', 'workspace:choose', 'workspace:ignore-map', 'workspace:open', 'tasks:snapshot', 'tasks:clear', 'team:updates', 'usage:get', 'audit:export', 'app:quit']);
 function validateIPC(channel, args) {
+  if(channel==='diagnostics:export'){if(args.length)fail('unexpected arguments');return;}
   if(channel==='group:list'){if(args.length)fail('unexpected arguments');return;}
   if(channel.startsWith('group:')){
     const counts={'group:start':3,'group:get':1,'group:send':3,'group:cancel':1,'group:end':1,'group:decision':2};

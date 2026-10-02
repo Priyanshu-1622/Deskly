@@ -25,6 +25,8 @@ jobs:
         run: npm test
       - name: Lint
         run: npm run lint
+      - name: Repository hygiene
+        run: npm run repo:check
       - name: Full dependency audit
         run: npm audit --audit-level=moderate
   windows:
@@ -40,6 +42,8 @@ jobs:
       - run: npm run lint
       - name: Desktop smoke check
         run: npm run smoke
+      - name: Guided first-task smoke check
+        run: npm run smoke:release-prep
       - name: Pack Windows app
         if: github.event_name == 'workflow_dispatch'
         run: npx electron-builder --win --dir

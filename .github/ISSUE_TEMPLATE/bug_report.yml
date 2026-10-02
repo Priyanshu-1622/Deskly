@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible Deskly problem
+body:
+  - type: markdown
+    attributes:
+      value: "Do not post API keys or private project content. You can save a safe diagnostic report from Settings → Privacy & data."
+  - type: input
+    id: version
+    attributes:
+      label: Deskly version or commit
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system and graphics hardware
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include whether you used demo mode or a provider, but never your key.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe diagnostics and screenshots
+      description: Review attachments for private information before sharing.

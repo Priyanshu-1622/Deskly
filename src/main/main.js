@@ -8,6 +8,7 @@ const { Runtime } = require('./runtime/runtime');
 const { PROVIDERS, testProfile, endpointFor, bindTestProfile } = require('./runtime/providers');
 const { Workspace } = require('./runtime/workspace');
 const { validateIPC, workspacePath } = require('./ipc-validation');
+const { diagnostics } = require('./diagnostics');
 
 const DEV = process.argv.includes('--dev');
 const RENDERER = path.join(__dirname, '..', 'renderer');
@@ -96,6 +97,12 @@ function wireIPC() {
     return store.saveConfig(cfg);
   });
   h('config:reset', async () => { await runtime.shutdown(); store.reset(); app.relaunch(); app.quit(); return true; });
+  h('diagnostics:export', async () => {
+    const result=await dialog.showSaveDialog(win,{title:'Save a private-data-free diagnostic report',defaultPath:`deskly-diagnostics-${new Date().toISOString().slice(0,10)}.json`,filters:[{name:'JSON report',extensions:['json']}]});
+    if(result.canceled||!result.filePath)return false;
+    const report=diagnostics({version:app.getVersion(),config:store.getConfig()||{},runtime,encrypted:store.encryptionAvailable(),crashes:rendererCrashes.filter(t=>Date.now()-t<60000).length});
+    await fs.promises.writeFile(result.filePath,JSON.stringify(report,null,2),'utf8');return true;
+  });
   h('data:erase', async () => {
     const result = await dialog.showMessageBox(win, { type: 'warning', title: 'Erase all Deskly data?', message: 'Erase settings, keys, memories, boards, tasks and local logs?', detail: 'Your project files will remain. Deskly will restart with a fresh office.', buttons: ['Cancel', 'Erase Deskly data'], defaultId: 0, cancelId: 0 });
     if (result.response !== 1) return false;

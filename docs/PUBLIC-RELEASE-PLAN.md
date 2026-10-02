@@ -1,6 +1,6 @@
 # Deskly public release plan
 
-Deskly is an installable Electron game app today. A production release needs reliable installation, clear first-time learning and verified real AI workflows, as well as attractive graphics. Ship a focused public beta before promising AAA polish.
+Deskly is an Electron desktop office game. Current source is prepared for continued beta validation; no new installer has been built in this pass. A public release still needs installation/signing checks and real AI workflow validation.
 
 ## Implemented in this pass
 - Removed the three redundant hanging CEO signs; retained the actual CEO door plaque.
@@ -12,7 +12,7 @@ Deskly is an installable Electron game app today. A production release needs rel
 ## Release gates, in order
 
 ### 1. First playable public beta
-- Add a guided practice task with explicit completion steps: choose a folder, test a connector, assign a small task, review permission, inspect the result.
+- Implemented: a guided practice task with folder/provider setup, an explicit connection check, task assignment, live progress, permissions and result review. Available from the first-day introduction.
 - Improve the first-day guide into an optional walking tour with objectives, arrival checks and contextual hints. Offer skip, replay and a searchable control reference.
 - Explain demo output versus real AI work everywhere a task can be launched. Connection tests must show actionable authentication, model, quota and network errors.
 - Verify every physical activity, chair, doorway, board and panel exit on a clean profile and an upgraded saved profile.
@@ -23,7 +23,7 @@ Deskly is an installable Electron game app today. A production release needs rel
 - Build a versioned Windows installer, validate clean install/update/uninstall, and document where private data and projects live.
 - Decide signing and release delivery; test OS security prompts and installation without developer tools.
 - Add a deliberate update channel with release notes, staged updates and recovery if an update fails.
-- Add local crash reports with an opt-in export, restore interrupted work, and provide save/profile export, import and migration tests.
+- Implemented: an optional diagnostic export with app/system versions, safe counts and health flags, excluding private content. Remaining: profile backup/import/migration and packaged crash recovery checks.
 - Test Mac/Linux packaging separately before claiming support. Keep the first beta's supported platforms and known limitations explicit.
 
 ### 3. Game feel and accessibility

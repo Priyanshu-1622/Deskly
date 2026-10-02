@@ -398,13 +398,16 @@
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.showFps !== false, onchange: e => { st.showFps = e.target.checked; } }), 'Show frame rate'),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.nameTags, onchange: e => { st.nameTags = e.target.checked; } }), 'Show name tags and speech bubbles'),
           h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => DK.appFullscreen() }, 'Toggle full screen (F11)')),
-          h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['F', 'Drink what you are holding'], ['R', 'Discard an empty cup'], ['P', 'Photo mode'], ['Tab', 'Operations board'], ['C / M', 'Call people / meeting'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
+          h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['F', 'Drink what you are holding'], ['R', 'Discard an empty cup'], ['P', 'Photo mode'], ['Tab', 'Operations board'], ['G', 'Office map'], ['B', 'Whiteboards'], ['H / F1', 'Introduction / guided task'], ['C / M', 'Call people / shared meeting'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
         else body = h('div', { class: 'sbody narrow' },
+          h('h3', {}, 'Help with a problem'),
+          h('p', { class: 'note' }, 'Save a diagnostic report for a bug report. It includes app and system versions, settings and activity counts. It excludes keys, names, project paths, file contents and conversations. Nothing is sent automatically.'),
+          h('button', { class: 'btn', type: 'button', onclick: async () => { try { if(await DK.diagnosticsExport())this.flash('Diagnostic report saved. You can review it before sharing.'); } catch(e) { this.flash(e.message); } } }, 'Save diagnostic report'),
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: draft.security.approveWrites, onchange: e => { draft.security.approveWrites = e.target.checked; } }), 'Ask me before an employee writes any file'),
           field('Monthly AI token ceiling · UTC month', h('input', { type: 'number', min: 0, step: 10000, value: draft.security.monthlyTokenLimit || 0, oninput: e => { draft.security.monthlyTokenLimit = Math.max(0, Number(e.target.value) || 0); } }), '0 means no ceiling. Deskly limits concurrent calls and reserves an estimated allowance before each call. Actual provider token counts can differ; this is a usage guard, not a provider billing limit.'),
           h('p', { class: 'note' }, 'Commands and anything leaving the company (email, publishing, deploys, payments) always need your approval, whatever this is set to.'),
           h('div', { class: 'row' },
-            h('button', { class: 'btn', type: 'button', onclick: async () => { const p = await DK.auditExport(); if (p) this.flash('Audit log saved to ' + p); } }, 'Export audit log'),
+            h('button', { class: 'btn', type: 'button', onclick: async () => { try { const p = await DK.auditExport(); if (p) this.flash('Audit log saved to ' + p); } catch(e) { this.flash(e.message); } } }, 'Export audit log'),
             h('button', { class: 'btn', type: 'button', onclick: async () => { await DK.tasksClear(); this.flash('Finished tasks cleared.'); } }, 'Clear finished tasks')),
           h('h3', {}, 'Danger zone'),
           h('button', { class: 'btn danger', type: 'button', onclick: ev => {

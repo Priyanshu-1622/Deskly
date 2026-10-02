@@ -57,7 +57,7 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 <details>
   <summary>Find rooms and keep working after dark</summary>
-  <br><img src="docs/visual-checks/office-atlas.png" alt="Current office atlas floor plan with a walking route to the CEO office" width="100%">
+  <br><img src="docs/screenshots/office-atlas.png" alt="Current office atlas floor plan with a walking route to the CEO office" width="100%">
   <br><img src="docs/screenshots/ceo-night.png" alt="Current CEO office under its skylights after dark" width="100%">
 </details>
 
@@ -80,7 +80,9 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 
 Each role ships with a detailed default playbook, and you can replace it for any employee in **Team & AI keys → Work instructions**. [Read the agent architecture](AGENT_ARCHITECTURE.md) for memory, coordination, and cost details.
 
-The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The current source passes 86 automated checks. A desktop discussion check covers all 15 employees, selected replies, shared decisions, a two-person CEO discussion, a missing API key, and reopening history without renderer errors.
+The first-day introduction includes **Try a guided project task**: check one connection, assign a small task, review permissions and inspect its result. For help, see the [user guide](docs/USER-GUIDE.md). **Settings → Privacy & data** can save a diagnostic report with versions and counts, excluding keys, private text and paths. [Privacy and storage details](docs/PRIVACY.md).
+
+The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The current source passes 87 automated checks. Desktop checks cover the guided first task and a discussion with all 15 employees, selected replies, shared decisions, a two-person CEO discussion, a missing API key, and reopening history without renderer errors.
 
 ### Lead a shared discussion
 
@@ -106,6 +108,7 @@ When you assign the first task in a project, Deskly creates `deskly.project.json
 ```bash
 npm run check     # lint plus automated runtime and UI tests
 npm run smoke     # isolated desktop rendering check
+npm run release:check # source release checks; no packaging
 npm audit         # include desktop/build dependencies
 npm run dev       # app with developer tools
 npm run dist:win  # build the Windows installer into dist/
@@ -189,4 +192,4 @@ Interact with an office whiteboard using **E**, or choose **Whiteboards** on the
 
 To keep everyone at the office overnight, use **Tab → Team → Call everyone back · keep here**. This hold continues across nights and restarts until you send them home; idle workers do not make AI calls.
 
-See [the public release plan](docs/PUBLIC-RELEASE-PLAN.md) for the remaining onboarding, installer, accessibility and real AI verification work.
+See [current release readiness](docs/RELEASE-READINESS.md) for verified source checks and remaining release gates, and [the public release plan](docs/PUBLIC-RELEASE-PLAN.md) for the broader roadmap.

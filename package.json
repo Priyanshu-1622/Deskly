@@ -29,6 +29,10 @@
     "lint": "eslint src tools test",
     "smoke": "node tools/visual-smoke.cjs",
     "check": "npm run lint && npm test",
+    "repo:check": "node tools/repository-check.cjs",
+    "smoke:release-prep": "node tools/release-smoke.cjs",
+    "audit:deps": "node tools/dependency-audit.cjs",
+    "release:check": "npm run check && npm run repo:check && npm run audit:deps && npm run smoke && npm run smoke:release-prep",
     "providers:live": "node tools/provider-check.cjs",
     "benchmark:agents": "node tools/agent-benchmark.cjs"
   },
@@ -44,7 +48,14 @@
     "productName": "Deskly",
     "files": [
       "src/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE",
+      "SECURITY.md",
+      "RELEASE_POLICY.md",
+      "THIRD_PARTY_NOTICES.md",
+      "docs/ASSET_CREDITS.md",
+      "docs/PRIVACY.md",
+      "docs/USER-GUIDE.md"
     ],
     "directories": {
       "output": "dist",

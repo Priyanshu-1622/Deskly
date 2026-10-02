@@ -8,7 +8,7 @@ const port = 9257;
 const profile = process.env.DESKLY_SMOKE_PROFILE ? path.resolve(process.env.DESKLY_SMOKE_PROFILE) : fs.mkdtempSync(path.join(os.tmpdir(), 'deskly-visual-'));
 if (process.env.DESKLY_SMOKE_PROFILE && !path.basename(profile).startsWith('deskly-visual-')) throw Error('Smoke profile must be a dedicated deskly-visual directory.');
 fs.mkdirSync(profile, { recursive: true });
-if ((process.env.DESKLY_NATIVE_CHECK === '1' || process.env.DESKLY_REDESIGN_CHECK === '1' || process.env.DESKLY_GROUP_CHECK === '1' || process.env.DESKLY_README_SHOTS === '1') && process.env.DESKLY_NATIVE_RESTART !== '1') {
+if ((process.env.DESKLY_NATIVE_CHECK === '1' || process.env.DESKLY_REDESIGN_CHECK === '1' || process.env.DESKLY_GROUP_CHECK === '1' || process.env.DESKLY_README_SHOTS === '1' || process.env.DESKLY_RELEASE_PREP_CHECK === '1') && process.env.DESKLY_NATIVE_RESTART !== '1') {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'deskly-smoke-project-'));
   fs.writeFileSync(path.join(profile, 'deskly-config.json'), JSON.stringify({ founder: 'Smoke', company: 'Deskly QA', workspace: project, employees: [{ id: 'qa', name: 'QA', role: 'Developer', provider: 'openai' }], assistant: { provider: 'demo' }, security: { approveWrites: true }, settings: { quality: 'low' } }));
 }
@@ -49,6 +49,33 @@ async function main() {
   for (let tries = 0; tries < 70; tries++) { if (await evaluate('!!window.__deskly?.world?.data && !!window.__deskly?.player')) break; await delay(300); }
   const ready = await evaluate('!!window.__deskly?.world?.data && !!window.__deskly?.player');
   if (!ready) throw new Error('Office failed to initialize');
+  if(process.env.DESKLY_RELEASE_PREP_CHECK==='1'){
+    const report=await evaluate(`(async()=>{
+      const a=window.__deskly,c=(await DK.configGet()).config;c.employees=DesklyPresets.defaultTeam().slice(0,2).map(e=>({...e,provider:'demo'}));await DK.configSave(c);a.screens.cfg=c;a.enterOffice();
+      const waitFor=async fn=>{for(let i=0;i<120;i++){if(await fn())return;await new Promise(r=>setTimeout(r,100));}throw Error('Release prep screen did not settle');};
+      const find=text=>[...document.querySelectorAll('#panel button')].find(b=>b.textContent===text);
+      a.ui.openGuide();find('Try a guided project task').click();
+      if(a.ui.panelKind!=='practice'||!find('Assign this practice task').disabled)throw Error('Practice task can start before connection check');
+      find('Check selected connection').click();await waitFor(()=>!find('Assign this practice task').disabled);
+      find('Assign this practice task').click();await waitFor(()=>!!a.ui.practiceTask?.id);
+      const id=a.ui.practiceTask.id;
+      await waitFor(()=>a.runtime.get(id)?.status==='waiting_for_approval');
+      let rounds=0;
+      while(rounds++<8){
+        const task=a.runtime.get(id);if(['completed','failed','cancelled'].includes(task.status))break;
+        for(const approval of a.runtime.pendingApprovals().filter(p=>p.taskId===id))await a.runtime.respondApproval(approval.id,'approved');
+        await new Promise(r=>setTimeout(r,150));
+      }
+      await waitFor(()=>a.runtime.get(id)?.status==='completed');a.ui.onRender();
+      if(!document.querySelector('#panel').textContent.includes('completed'))throw Error('Practice completion not visible');
+      const files=a.runtime.get(id).files;if(!files.length||!(await DK.workspaceRead(files[0])).length)throw Error('Practice deliverable missing');
+      a.ui.close();if(a.player.enabled!==true)throw Error('Practice exit blocked controls');
+      a.screens.openSettings('data');if(!document.querySelector('#screen-settings').textContent.includes('Save diagnostic report'))throw Error('Diagnostic export missing');
+      if(typeof DK.diagnosticsExport!=='function')throw Error('Native diagnostics bridge missing');
+      return{guidedConnection:true,assignment:true,approvals:true,completion:true,deliverable:true,controlsRestored:true,diagnosticsVisible:true};
+    })()`);
+    console.log(JSON.stringify({releasePreparation:report,errors},null,2));if(errors.length)throw Error('Release preparation renderer errors');return;
+  }
   if(process.env.DESKLY_README_SHOTS==='1'){
     await send('Emulation.setDeviceMetricsOverride',{width:1920,height:1080,deviceScaleFactor:1,mobile:false});
     await evaluate(`(async()=>{const a=window.__deskly,c=(await DK.configGet()).config;c.founder='Alex Rivera';c.company='Deskly Studio';c.employees=DesklyPresets.defaultTeam().map(e=>({...e,provider:'demo'}));await DK.configSave(c);a.screens.cfg=c;await document.fonts.ready;a.screens.start();})()`);
