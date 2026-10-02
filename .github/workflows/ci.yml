@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1'
 
 jobs:
   test:
@@ -20,3 +23,33 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Run tests
         run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Full dependency audit
+        run: npm audit --audit-level=moderate
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - name: Desktop smoke check
+        run: npm run smoke
+      - name: Pack Windows app
+        if: github.event_name == 'workflow_dispatch'
+        run: npx electron-builder --win --dir
+      - name: Smoke packaged app
+        if: github.event_name == 'workflow_dispatch'
+        run: node tools/visual-smoke.cjs
+        env:
+          DESKLY_SMOKE_EXECUTABLE: dist/win-unpacked/Deskly.exe
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: windows-unpacked
+          path: dist/win-unpacked

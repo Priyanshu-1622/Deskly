@@ -126,6 +126,10 @@ def write_character(sex):
     neck=heads['neck01'][1]/factor+min_y
     for name,ancestry in [('Face_A','african'),('Face_B','asian')]:
         delta=(target(ancestry+'-'+sex+'-young.target')-target('caucasian-'+sex+'-young.target'))*factor
+        # Source identity targets also change stature. Facial customization
+        # must remain anchored to this character's existing head skeleton.
+        head_anchor=RIG['joints'][RIG['bones']['head']['head']]
+        delta-=delta[head_anchor].mean(axis=0)
         blend=np.clip((body[:,1]-neck)/.75,0,1);blend=blend*blend*(3-2*blend)
         delta*=blend[:,None];face_masks[name]=delta
     # Authored geometry is stored in UV-split indexed form. Source weight indices
@@ -140,20 +144,68 @@ def write_character(sex):
                 if key not in table:table[key]=len(vertices);vertices.append(positions[v]);tex.append(uv[t]);source_ids.append(v)
                 indices.append(table[key])
         p=np.array(vertices,dtype=np.float32);tri=np.array(indices,dtype=np.uint32).reshape(-1,3)
-        source_normals=np.zeros_like(positions);face_normals=np.cross(p[tri[:,1]]-p[tri[:,0]],p[tri[:,2]]-p[tri[:,0]])
-        ids=np.array(source_ids)
+        texture_uv=np.array(tex,dtype=np.float32)
+        w=weights[source_ids]
+        shapes=[d[source_ids].copy() for d in (shape_data or face_masks).values()] if morph else []
+        if name=='Body':
+            # Curved edge refinement only on the face. Preserve the authored
+            # vertices, UV seams, rig weights, and the rest of the body budget.
+            source_n=np.zeros_like(positions)
+            cross=np.cross(p[tri[:,1]]-p[tri[:,0]],p[tri[:,2]]-p[tri[:,0]])
+            for j in range(3):np.add.at(source_n,np.array(source_ids)[tri[:,j]],cross)
+            source_n/=np.maximum(np.linalg.norm(source_n,axis=1,keepdims=True),1e-8)
+            n=source_n[source_ids]
+            points=list(p);coords=list(texture_uv);skin_weights=list(w)
+            shape_points=[list(d) for d in shapes];edges={};refined=[]
+            threshold=heads['neck01'][1]+.04
+            def midpoint(a,b):
+                if min(p[a,1],p[b,1])<threshold:return None
+                key=tuple(sorted((int(a),int(b))))
+                if key in edges:return edges[key]
+                middle=(p[a]+p[b])*.5
+                curved=middle-.5*(np.dot(middle-p[a],n[a])*n[a]+np.dot(middle-p[b],n[b])*n[b])
+                correction=curved-middle;distance=np.linalg.norm(correction)
+                # Long edges near the mouth or throat must not bulge or
+                # bridge facial cavities while rounding the silhouette.
+                curved=middle+correction*min(1,.001/max(distance,1e-8))
+                index=len(points);edges[key]=index;points.append(curved);coords.append((texture_uv[a]+texture_uv[b])*.5);skin_weights.append((w[a]+w[b])*.5)
+                for i,d in enumerate(shapes):shape_points[i].append((d[a]+d[b])*.5)
+                return index
+            for a,b,c in tri:
+                ab,bc,ca=midpoint(a,b),midpoint(b,c),midpoint(c,a)
+                count=sum(e is not None for e in [ab,bc,ca])
+                if count==3:refined.extend([(a,ab,ca),(ab,b,bc),(ca,bc,c),(ab,bc,ca)])
+                elif count==0:refined.append((a,b,c))
+                elif count==1:
+                    if ab is not None:refined.extend([(a,ab,c),(ab,b,c)])
+                    elif bc is not None:refined.extend([(b,bc,a),(bc,c,a)])
+                    else:refined.extend([(c,ca,b),(ca,a,b)])
+                elif ab is None:refined.extend([(c,ca,bc),(ca,a,b),(ca,b,bc)])
+                elif bc is None:refined.extend([(a,ab,ca),(ab,b,c),(ab,c,ca)])
+                else:refined.extend([(b,bc,ab),(bc,c,a),(bc,a,ab)])
+            p=np.array(points,dtype=np.float32);texture_uv=np.array(coords,dtype=np.float32);w=np.array(skin_weights)
+            shapes=[np.array(d,dtype=np.float32) for d in shape_points];tri=np.array(refined,dtype=np.uint32);indices=tri.reshape(-1)
+            # Shared positions receive shared normals even across UV seams.
+            _,ids=np.unique(np.round(p,7),axis=0,return_inverse=True)
+        else:ids=np.array(source_ids)
+        source_normals=np.zeros((int(ids.max())+1,3));face_normals=np.cross(p[tri[:,1]]-p[tri[:,0]],p[tri[:,2]]-p[tri[:,0]])
         for j in range(3):np.add.at(source_normals,ids[tri[:,j]],face_normals)
         normals=source_normals[ids].astype(np.float32)
         normals/=np.maximum(np.linalg.norm(normals,axis=1,keepdims=True),1e-8)
-        w=weights[source_ids]
         if head_only:w=np.zeros_like(w);w[:,BI['head']]=1
         joints=np.argsort(w,axis=1)[:,-4:][:,::-1].astype(np.uint16); selected=np.take_along_axis(w,joints,axis=1).astype(np.float32);selected/=selected.sum(axis=1,keepdims=True)
-        texture_uv=np.array(tex,dtype=np.float32);texture_uv[:,1]=1-texture_uv[:,1]
+        texture_uv[:,1]=1-texture_uv[:,1]
         attr={'POSITION':accessor(p,'VEC3',5126,True),'NORMAL':accessor(normals,'VEC3',5126),'TEXCOORD_0':accessor(texture_uv,'VEC2',5126),'JOINTS_0':accessor(joints,'VEC4',5123),'WEIGHTS_0':accessor(selected,'VEC4',5126)}
         primitive={'attributes':attr,'indices':accessor(np.array(indices,dtype=np.uint32),'SCALAR',5125),'material':mat}
         m={'name':name,'primitives':[primitive]}
         if morph:
-            primitive['targets']=[{'POSITION':accessor(d[source_ids].astype(np.float32),'VEC3',5126,True)} for d in (shape_data or face_masks).values()]
+            primitive['targets']=[]
+            for d in shapes:
+                moved=p+d;cross=np.cross(moved[tri[:,1]]-moved[tri[:,0]],moved[tri[:,2]]-moved[tri[:,0]])
+                accum=np.zeros_like(source_normals)
+                for j in range(3):np.add.at(accum,ids[tri[:,j]],cross)
+                moved_n=accum[ids];moved_n/=np.maximum(np.linalg.norm(moved_n,axis=1,keepdims=True),1e-8)
+                primitive['targets'].append({'POSITION':accessor(d.astype(np.float32),'VEC3',5126,True),'NORMAL':accessor((moved_n-normals).astype(np.float32),'VEC3',5126)})
             m['weights']=[0,0];m['extras']={'targetNames':list(face_masks)}
         doc['meshes'].append(m);index=len(doc['nodes']);doc['nodes'].append({'name':name,'mesh':len(doc['meshes'])-1,'skin':0});doc['scenes'][0]['nodes'].append(index)
         print(sex,name,len(indices)//3,'triangles')

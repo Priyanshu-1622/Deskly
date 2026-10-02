@@ -9,7 +9,7 @@
       if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else if (k === 'class') el.className = v;
       else if (k === 'style') el.style.cssText = v;
-      else if (k === 'html') el.innerHTML = v;
+      else if (k === 'markdown') el.innerHTML = DesklyUI.md(v);
       else if (k === 'value') el.value = v;
       else if (k === 'checked') el.checked = !!v;
       else el.setAttribute(k, v === true ? '' : v);
@@ -21,7 +21,8 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   const initials = n => String(n || '?').replace(/^Dr\.\s*/, '').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('small', {}, hint) : null);
-  const mark = (extra = '') => h('img', { class: `deskly-mark ${extra}`.trim(), src: 'assets/deskly-icon.png', alt: '' });
+  const mark = (extra = '') => h('span', { class: 'deskly-logo', 'aria-hidden': 'true' }, h('img', { class: `deskly-mark ${extra}`.trim(), src: 'assets/deskly-icon.png', alt: '' }));
+  const departmentColor = department => ({ Engineering: '#9CC4F2', Design: '#CDB4E8', Marketing: '#F5B88A', Research: '#A9B6F2', Finance: '#A6D9A8', Sales: '#F0A39B', Support: '#EBD27F', HR: '#8FD6CF', IT: '#B9C0CA', Reception: '#E7B7D0' })[department] || '#B9C0CA';
 
   const DEFAULT_SETTINGS = { sensitivity: 1, invertY: false, fov: 70, quality: 'balanced', smoothPerformance: true, showFps: true, nameTags: true, timeZone: 'auto', timeMode: 'real', soundVolume: 0.65 };
 
@@ -33,8 +34,11 @@
     async load() {
       this.info = await DK.appInfo();
       const r = await DK.configGet();
-      this.cfg = r.config; this.keys = r.keys || {};
+      this.cfg = r.config; this.keys = r.keys || {}; this.recoveryNotices = r.notices || []; if (this.recoveryNotices.length) this.showRecovery(this.recoveryNotices);
       return this.cfg;
+    }
+    showRecovery(notices) {
+      const panel = h('section', { class: 'card amber', style: 'position:fixed;z-index:10000;top:20px;right:20px;max-width:560px;padding:20px' }, h('h3', {}, 'Local data recovery'), ...notices.map(n => h('p', {}, n)), h('button', { class: 'btn', onclick: () => panel.remove() }, 'Dismiss')); document.body.append(panel);
     }
     providers() { return this.info?.providers || {}; }
     settings() { return { ...DEFAULT_SETTINGS, ...(this.cfg?.settings || {}) }; }
@@ -50,7 +54,7 @@
       const cfg = this.cfg, s = $('#screen-start');
       const team = cfg?.employees?.length || 0;
       const withAI = (cfg?.employees || []).filter(e => e.provider && e.provider !== 'demo').length;
-      const menu = h('nav', { class: 'menu' },
+      const menu = h('nav', { class: 'menu', 'aria-label': 'Main menu' },
         cfg ? h('button', { class: 'mbtn primary', type: 'button', id: 'mEnter', onclick: () => this.app.enterOffice() }, h('b', {}, this.app.playing || this.app.office ? 'Back to the office' : 'Enter the office'), h('small', {}, `${cfg.company} · ${team} people`)) :
           h('button', { class: 'mbtn primary', type: 'button', id: 'mSetup', onclick: () => this.setup() }, h('b', {}, 'Set up your office'), h('small', {}, 'Name your company, pick a project folder, hire your team')),
         cfg ? h('button', { class: 'mbtn', type: 'button', onclick: () => this.openSettings('team') }, h('b', {}, 'Team & AI keys'), h('small', {}, `${withAI} of ${team} connected to an AI provider`)) : null,
@@ -59,41 +63,84 @@
         h('button', { class: 'mbtn ghost', type: 'button', onclick: () => DK.appQuit() }, h('b', {}, 'Quit')));
       s.replaceChildren(
         h('div', { class: 'start-left' },
-          h('div', { class: 'brand' }, mark(), h('div', {}, h('h1', {}, 'Deskly'), h('p', {}, 'Your AI company, in a real office.'))),
+          h('div', { class: 'title-masthead' }, h('span', { class: 'tape' }, 'Building open'), h('span', { class: 'label' }, cfg?.company || 'Your next company')), h('div', { class: 'brand title-brand' }, mark(), h('div', {}, h('h1', {}, 'ESKLY'), h('p', {}, 'Your AI company, in a real office.'))),
           menu,
           h('footer', {}, h('span', {}, this.info.version === 'web' ? 'Browser preview' : `v${this.info.version}`), h('span', {}, this.info.encryption ? 'API keys encrypted with your OS keychain' : (DK.native ? 'Secure key storage unavailable — API keys cannot be saved' : 'Keys and real work need the desktop app')),
             h('a', { href: '#', onclick: e => { e.preventDefault(); DK.shellExternal('https://github.com/Priyanshu-1622/Deskly'); } }, 'Open source on GitHub'))),
-        h('div', { class: 'start-right' }, cfg ? h('div', { class: 'glance' },
-          h('h3', {}, 'Today at ' + cfg.company),
-          h('div', { class: 'faces' }, ...(cfg.employees || []).slice(0, 12).map(e => h('span', { class: 'face', title: `${e.name} · ${e.role}`, style: `background:${P().DEPARTMENTS[e.dept]?.color || '#555'}` }, initials(e.name)))),
-          h('p', {}, `${team} people across ${new Set((cfg.employees || []).map(e => e.dept)).size} departments. Walk in, talk to anyone, hand them real work on your project.`)) :
-          h('div', { class: 'glance' }, h('h3', {}, 'How it works'), h('ol', {}, h('li', {}, 'Hire AI employees and give each one a provider and API key.'), h('li', {}, 'Walk your office in first person and hand people real work.'), h('li', {}, 'They work in your project folder, stop for your approval on anything risky, and bring you the result.'), h('li', {}, 'Sit at your own laptop to code and chat with your assistant.'))))
+        h('div', { class: 'start-right' }, this.shiftBoard(cfg))
       );
+      this.directoryMenu(menu);
       this.show('screen-start');
-      setTimeout(() => s.querySelector('.mbtn.primary')?.focus(), 50);
+      setTimeout(() => s.querySelector('.mbtn.selected')?.focus(), 50);
+    }
+
+    directoryMenu(menu) {
+      const buttons = [...menu.querySelectorAll('.mbtn')];
+      const select = button => buttons.forEach(item => item.classList.toggle('selected', item === button));
+      select(buttons.find(button => button.classList.contains('primary')) || buttons[0]);
+      buttons.forEach((button, index) => {
+        button.classList.remove('primary');
+        button.addEventListener('focus', () => select(button));
+        button.addEventListener('pointerenter', () => button.focus({ preventScroll: true }));
+        button.prepend(h('span', { class: 'menu-number', 'aria-hidden': 'true' }, String(index + 1).padStart(2, '0')));
+        button.addEventListener('keydown', event => {
+          if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+          event.preventDefault(); buttons[(index + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length].focus();
+        });
+      });
+    }
+    shiftBoard(cfg) {
+      const board = h('div', { class: 'glance plate ticks shift-board' });
+      const render = () => {
+        const tasks = this.app.runtime?.list() || [];
+        const today = new Date().toLocaleDateString();
+        const count = status => tasks.filter(status).length;
+        const stats = [
+          ['Working', count(t => ['created', 'queued', 'planning', 'running', 'reviewing'].includes(t.status)), ''],
+          ['Needs you', this.app.runtime?.pendingApprovals().length || 0, 'wait'],
+          ['Done today', count(t => t.status === 'completed' && new Date(t.updatedAt || t.createdAt).toLocaleDateString() === today), '']
+        ];
+        board.replaceChildren(h('div', { class: 'shift-heading' }, h('span', { class: 'tape dark' }, 'On the floor'), h('span', { class: 'label' }, this.app.clockInfo?.time || '')),
+          h('div', { class: 'shift-counts' }, ...stats.map(([label, value, tone]) => h('div', {}, h('div', { class: 'digits' }, ...String(value).padStart(2, '0').split('').map(digit => h('span', { class: 'flap ' + tone }, digit))), h('span', { class: 'label' }, label)))),
+          ...tasks.slice(0, 3).map(task => h('div', { class: 'brow' }, h('i'), h('div', {}, h('b', {}, task.employeeName), h('span', { class: 's' }, task.title)), h('span', { class: 'chip' }, task.status === 'waiting_for_approval' ? 'Needs you' : task.status === 'completed' ? 'Done' : task.status === 'failed' ? 'Failed' : task.status.replace(/_/g, ' ')))),
+          tasks.length ? null : h('p', { class: 'note' }, cfg ? 'Your next work order starts with a conversation. Walk up to an employee and press E.' : 'Name your company, choose a project and hire your team to begin.'),
+          h('div', { class: 'shift-foot label' }, `${cfg?.employees?.length || 0} employees · ${cfg?.company || 'Office not configured'}`));
+      };
+      render();
+      clearInterval(this.shiftTimer);
+      this.shiftTimer = setInterval(() => { if ($('#screen-start').hidden) { clearInterval(this.shiftTimer); return; } render(); }, 2000);
+      return board;
     }
 
     /* =============================== SETUP =============================== */
     setup() {
-      const draft = this.cfg ? clone(this.cfg) : { founder: '', company: '', workspace: '', employees: P().defaultTeam(), assistant: { provider: 'demo', model: '' }, settings: { ...DEFAULT_SETTINGS }, security: { approveWrites: false } };
+      const draft = this.cfg ? clone(this.cfg) : { founder: '', company: '', workspace: '', employees: P().defaultTeam(), assistant: { provider: 'demo', model: '' }, settings: { ...DEFAULT_SETTINGS }, security: { approveWrites: true } };
       this.pendingKeys = {};
       let step = 0;
       const s = $('#screen-setup');
       const steps = ['You', 'Project', 'Team', 'Assistant', 'Ready'];
       const render = () => {
+        s.dataset.step = String(step);
         const bar = h('ol', { class: 'wsteps' }, ...steps.map((n, i) => h('li', { class: i === step ? 'now' : i < step ? 'done' : '' }, h('span', {}, i < step ? '✓' : i + 1), n)));
         let body, canNext = true;
         if (step === 0) {
           const a = h('input', { type: 'text', id: 'suFounder', value: draft.founder, placeholder: 'e.g. Priyanshu', oninput: e => { draft.founder = e.target.value; } });
           const b = h('input', { type: 'text', id: 'suCompany', value: draft.company, placeholder: 'e.g. Nimbus Labs', oninput: e => { draft.company = e.target.value; } });
-          body = h('div', { class: 'wbody narrow' }, h('h2', {}, 'Welcome to Deskly'), h('p', { class: 'lead' }, 'You run the company. Your team is made of AI employees who do real work on your projects while you walk the office.'),
+          body = h('div', { class: 'wbody narrow' }, h('h2', {}, 'Who runs this place?'), h('p', { class: 'lead' }, 'You run the company. Your team is made of AI employees who do real work on your projects while you walk the office.'),
             field('Your name', a, 'Your team will call you this.'), field('Company name', b));
+          const badgeName = h('b', { class: 'badge-name' }, draft.founder || 'Your name');
+          const badgeCompany = h('span', { class: 'label' }, draft.company || 'Your company');
+          const badgeInitials = h('div', { class: 'badge-portrait' }, initials(draft.founder || 'Founder'));
+          const badge = h('article', { class: 'founder-badge', 'aria-label': 'Founder badge preview' }, badgeCompany, badgeInitials, badgeName, h('span', { class: 'badge-role' }, 'Founder · All access'), h('div', { class: 'badge-barcode', 'aria-hidden': 'true' }), h('small', {}, 'FND-0001 · FLOOR 1'));
+          const updateBadge = () => { badgeName.textContent = draft.founder || 'Your name'; badgeCompany.textContent = draft.company || 'Your company'; badgeInitials.textContent = initials(draft.founder || 'Founder'); };
+          a.addEventListener('input', updateBadge); b.addEventListener('input', updateBadge);
+          body = h('div', { class: 'badge-layout' }, body, badge);
           setTimeout(() => a.focus(), 30);
         } else if (step === 1) {
           const path = h('code', { class: 'path' }, draft.workspace || 'No folder chosen yet');
           body = h('div', { class: 'wbody narrow' }, h('h2', {}, 'Pick a project folder'), h('p', { class: 'lead' }, 'Your team reads and writes files in this folder. Shell commands need your approval, but they can access other locations on your computer.'),
             h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: async () => { const p = await DK.workspaceChoose(); if (p) { draft.workspace = p; render(); } } }, draft.workspace ? 'Change folder' : 'Choose folder…')), path,
-            h('p', { class: 'note' }, 'Tip: start with a fresh folder or a Git repository so every change is easy to review.'));
+            h('p', { class: 'note' }, 'Deskly creates deskly.project.json on your first task to record work areas. Start with a fresh folder or a Git repository so changes are easy to review.'));
         } else if (step === 2) {
           body = h('div', { class: 'wbody' }, h('div', { class: 'whead' }, h('h2', {}, 'Hire your team'),
             h('div', { class: 'row' },
@@ -126,9 +173,9 @@
       this.show('screen-setup'); render();
     }
     async persist(draft) {
-      for (const [id, key] of Object.entries(this.pendingKeys || {})) this.keys = await DK.secretSet(id, key);
+      for (const [id, key] of Object.entries(this.pendingKeys || {})) this.keys = await DK.secretSet(id, key, id === 'assistant' ? draft.assistant : draft.employees.find(e => e.id === id));
       this.pendingKeys = {};
-      this.cfg = await DK.configSave(draft);
+      this.cfg = await DK.configSave(draft); this.keys = (await DK.configGet()).keys || {};
       return this.cfg;
     }
 
@@ -154,16 +201,16 @@
           h('div', { class: 'row' },
             o.provider && o.provider !== 'demo' ? h('button', { class: 'btn', type: 'button', onclick: async () => {
               status.textContent = 'Testing…'; status.className = 'test';
-              let saved = false;
+              let saved = false; const testKey = this.pendingKeys[id] || '';
               try {
                 if (this.pendingKeys[id] && !p.localCli) {
-                  this.keys = await DK.secretSet(id, this.pendingKeys[id]);
+                  this.keys = await DK.secretSet(id, this.pendingKeys[id], o);
                   delete this.pendingKeys[id];
                   keyInput.value = '';
                   keyInput.placeholder = '•••••••• saved — type to replace';
                   saved = true;
                 }
-                const r = await DK.providerTest({ ...o, apiKey: '' }, id);
+                const r = await DK.providerTest({ ...o, apiKey: testKey }, id);
                 status.textContent = `${saved ? 'Key saved · ' : ''}Connected · ${r.ms} ms`;
                 status.className = 'test ok';
               } catch (e) {
@@ -181,10 +228,45 @@
       return wrap;
     }
 
+    keyDirectory(draft) {
+      return h('div', { class: 'key-directory plate ticks' }, h('div', { class: 'key-row key-head label' }, ...['', 'Employee', 'Provider', 'Model', 'Access', ''].map(label => h('span', {}, label))), ...draft.employees.map(employee => {
+        const provider = this.providers()[employee.provider] || {};
+        const saved = this.keys[employee.id] || this.pendingKeys[employee.id];
+        const access = provider.localCli ? 'Installed login' : employee.provider === 'demo' || !employee.provider ? 'Demo mode' : employee.keyFrom ? 'Shared key' : saved ? 'Sealed' : provider.needsKey ? 'No key' : 'No key needed';
+        const row = h('div', { class: 'key-row' }, h('span', { class: 'face', style: `background:${departmentColor(employee.dept)}` }, initials(employee.name)), h('div', {}, h('b', {}, employee.name), h('small', {}, employee.role)), h('span', {}, provider.label || employee.provider || 'Demo'), h('span', { class: 'key-model' }, employee.model || provider.defaultModel || 'Default'), h('span', { class: 'chip' }, access));
+        const editor = h('div', { class: 'key-editor' }, this.aiFields(employee, employee.id, draft)); editor.hidden = true;
+        row.append(h('button', { class: 'btn sm ghost', type: 'button', 'aria-expanded': 'false', onclick: event => { editor.hidden = !editor.hidden; event.currentTarget.setAttribute('aria-expanded', String(!editor.hidden)); event.currentTarget.textContent = editor.hidden ? 'Configure' : 'Close'; } }, 'Configure'));
+        return h('div', { class: 'key-entry' }, row, editor);
+      }));
+    }
+
+    teamSettings(draft) {
+      const root=h('div',{class:'sbody team-settings'});
+      const content=h('div',{id:'team-settings-content',role:'tabpanel'});
+      const views=[['keys','AI providers & keys','Connect each employee to an AI provider.'],['people','Edit team, skills & appearance','Hire employees, edit their skills and instructions, and customize their appearance.']];
+      let selected='keys';
+      const buttons=views.map(([id,label],index)=>h('button',{class:'team-section-tab',type:'button',role:'tab',id:'team-section-'+id,'aria-controls':'team-settings-content',onclick:()=>{selected=id;render();},onkeydown:event=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+        event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowRight'?1:buttons.length-1))%buttons.length;
+        buttons[next].click();buttons[next].focus();
+      }},label));
+      const description=h('p',{class:'note'});
+      const render=()=>{
+        buttons.forEach((button,index)=>{const active=views[index][0]===selected;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;});
+        description.textContent=views.find(view=>view[0]===selected)[2];
+        content.setAttribute('aria-labelledby','team-section-'+selected);
+        content.replaceChildren(selected==='keys'?this.keyDirectory(draft):this.teamEditor(draft));
+        root.scrollTop=0;
+      };
+      root.append(h('div',{class:'team-section-nav'},h('div',{role:'tablist','aria-label':'Team management'},...buttons),description),content);
+      render();return root;
+    }
+
     /* =============================== TEAM EDITOR =============================== */
     teamEditor(draft) {
-      let sel = draft.employees[0]?.id;
-      const root = h('div', { class: 'team' });
+      const hiring = document.body.dataset.screen === 'screen-setup';
+      let sel = hiring ? null : draft.employees[0]?.id;
+      const root = h('div', { class: 'team' + (hiring ? ' hiring-team' : '') });
       const list = h('div', { class: 'tlist' });
       const edit = h('div', { class: 'tedit' });
       const preview = this.preview();
@@ -192,9 +274,9 @@
       const renderList = () => {
         const addSel = h('select', { id: 'addRole' }, ...Object.keys(R).map(r => h('option', { value: r }, r)));
         list.replaceChildren(
-          ...draft.employees.map(e => h('button', { type: 'button', class: 'tmember' + (e.id === sel ? ' on' : ''), onclick: () => { sel = e.id; renderList(); renderEdit(); } },
-            h('span', { class: 'face', style: `background:${D[e.dept]?.color || '#555'}` }, initials(e.name)),
-            h('span', { class: 'meta' }, h('b', {}, e.name), h('small', {}, `${e.role} · ${e.provider && e.provider !== 'demo' ? e.provider : 'demo'}`)),
+          ...draft.employees.map(e => h('button', { type: 'button', class: 'tmember' + (e.id === sel ? ' on' : ''), style: `--d:${departmentColor(e.dept)}`, onclick: () => { sel = e.id; renderList(); renderEdit(); } },
+            h('span', { class: 'face', style: `background:${departmentColor(e.dept)}` }, initials(e.name)),
+            h('span', { class: 'meta' }, h('span', { class: 'dept' }, e.dept), h('b', {}, e.name), h('small', {}, e.role), h('small', { class: 'member-provider' }, `${e.provider && e.provider !== 'demo' ? e.provider : 'Demo mode'}`)),
             h('i', { class: 'dot', title: e.provider && e.provider !== 'demo' ? 'AI connected' : 'Demo mode', style: `background:${e.provider && e.provider !== 'demo' && (this.keys[e.id] || this.pendingKeys[e.id] || e.keyFrom || !(this.providers()[e.provider] || {}).needsKey) ? '#2fbf71' : '#f0a020'}` }))),
           h('div', { class: 'tadd' }, addSel, h('button', { class: 'btn primary', type: 'button', onclick: () => {
             const e = P().makeEmployee(addSel.value, { name: 'New ' + addSel.value.toLowerCase() });
@@ -204,6 +286,7 @@
       };
       const renderEdit = () => {
         const e = draft.employees.find(x => x.id === sel);
+        edit.hidden = !e;
         if (!e) { edit.replaceChildren(h('p', { class: 'note' }, 'Hire someone to get started.')); return; }
         const L2 = e.look = e.look || {};
         const upd = () => { preview.set(e.look); renderList(); };
@@ -215,10 +298,11 @@
               h('h3', {}, 'Profile'),
               h('div', { class: 'grid2' },
                 field('Name', h('input', { type: 'text', value: e.name, oninput: ev => { e.name = ev.target.value; renderList(); } })),
-                field('Role', h('select', { onchange: ev => { const r = R[ev.target.value]; Object.assign(e, { role: r.role, dept: r.dept, scope: r.scope, persona: r.persona, resume: DesklyResumes.forRole(r.role), instructions: r.instructions, tasks: r.tasks.slice() }); renderList(); renderEdit(); } }, ...Object.keys(R).map(r => h('option', { value: r, selected: r === e.role }, r))))),
+                field('Role', h('select', { onchange: ev => { const r = R[ev.target.value]; Object.assign(e, { role: r.role, workArea: r.workArea, dept: r.dept, scope: r.scope, persona: r.persona, resume: DesklyResumes.forRole(r.role), instructions: r.instructions, tasks: r.tasks.slice() }); renderList(); renderEdit(); } }, ...Object.keys(R).map(r => h('option', { value: r, selected: r === e.role }, r))))),
               h('div', { class: 'grid2' },
                 field('Department (desk area)', h('select', { onchange: ev => { e.dept = ev.target.value; renderList(); } }, ...Object.keys(D).map(d => h('option', { value: d, selected: d === e.dept }, d)))),
                 field('Job title', h('input', { type: 'text', value: e.role, oninput: ev => { e.role = ev.target.value; renderList(); } }))),
+              field('Project work area', h('select', { onchange: ev => { e.workArea = ev.target.value; } }, ...['frontend', 'backend', 'shared', 'docs', 'operations'].map(area => h('option', { value: area, selected: area === (e.workArea || P().ROLES[e.role]?.workArea || 'docs') }, area))), 'Choose where this employee creates project files.'),
               field('What they do', h('input', { type: 'text', value: e.scope || '', oninput: ev => { e.scope = ev.target.value; } })),
               field('Personality', h('textarea', { rows: 2, oninput: ev => { e.persona = ev.target.value; } }, e.persona || '')),
               h('h3', {}, 'Résumé · skills and knowledge'),
@@ -273,7 +357,7 @@
       };
       const loop = () => {
         if (!alive) return;
-        if (canvas.isConnected && rig) { t += 1 / 60; rig.root.rotation.y = Math.sin(t * 0.5) * 0.7; rig.update(1 / 60, rig.root.rotation.y); r.render(sc, cam); }
+        if (!document.hidden && canvas.checkVisibility() && rig) { t += 1 / 60; rig.root.rotation.y = Math.sin(t * 0.5) * 0.7; rig.update(1 / 60, rig.root.rotation.y); r.render(sc, cam); }
         requestAnimationFrame(loop);
       };
       loop();
@@ -284,7 +368,7 @@
     /* =============================== SETTINGS =============================== */
     openSettings(tab = 'general') {
       const draft = clone(this.cfg); this.pendingKeys = {};
-      draft.settings = { ...DEFAULT_SETTINGS, ...(draft.settings || {}) }; draft.security = draft.security || { approveWrites: false };
+      draft.settings = { ...DEFAULT_SETTINGS, ...(draft.settings || {}) }; draft.security = draft.security || { approveWrites: true };
       const s = $('#screen-settings');
       const tabs = { general: 'General', team: 'Team & AI keys', memory: 'Memory & usage', assistant: 'Your assistant', controls: 'Controls & display', data: 'Privacy & data' };
       let cur = tab;
@@ -294,13 +378,14 @@
         if (cur === 'general') body = h('div', { class: 'sbody narrow' },
           field('Your name', h('input', { type: 'text', value: draft.founder, oninput: e => { draft.founder = e.target.value; } })),
           field('Company name', h('input', { type: 'text', value: draft.company, oninput: e => { draft.company = e.target.value; } })),
-          field('Project folder', h('div', { class: 'row' }, h('code', { class: 'path' }, draft.workspace || 'Not set'), h('button', { class: 'btn', type: 'button', onclick: async () => { const p = await DK.workspaceChoose(); if (p) { draft.workspace = p; render(); } } }, 'Change…')), 'Your team can only read and write inside this folder.'),
+          field('Project folder', h('div', { class: 'row' }, h('code', { class: 'path' }, draft.workspace || 'Not set'), h('button', { class: 'btn', type: 'button', onclick: async () => { const p = await DK.workspaceChoose(); if (p) { draft.workspace = p; render(); } } }, 'Change…')), 'File tools stay inside this folder; approved shell commands can access your computer. Deskly records role folders in deskly.project.json.'),
+          h('button', { class: 'btn', type: 'button', onclick: async () => { try { await DK.workspaceIgnoreMap(); this.flash('Added deskly.project.json to .gitignore.'); } catch (e) { this.flash(e.message); } } }, 'Ignore Deskly project map in Git'),
           field('Office region', h('select', { onchange: e => { st.timeZone = e.target.value; } }, ...DesklyOfficeTime.REGIONS.map(r => h('option', { value: r.id, selected: st.timeZone === r.id }, r.label))), 'The clock, sunrise, sunset, and team schedule use this region. Daylight saving changes are handled automatically.'),
           field('Time flow', h('select', { onchange: e => { st.timeMode = e.target.value; } },
             h('option', { value: 'real', selected: st.timeMode === 'real' }, 'Real time'),
             h('option', { value: 'preview', selected: st.timeMode === 'preview' }, 'Preview day cycle · 5 office minutes per second')),
           'Real time uses the actual date and clock. Preview is for watching the full sky and office shift cycle quickly.'));
-        else if (cur === 'team') body = h('div', { class: 'sbody' }, this.teamEditor(draft));
+        else if (cur === 'team') body = this.teamSettings(draft);
         else if (cur === 'memory') body = this.memoryPanel(draft);
         else if (cur === 'assistant') body = h('div', { class: 'sbody narrow' }, h('p', { class: 'lead' }, 'The assistant on your laptop. It sees the file you have open when you ask about it.'), this.aiFields(draft.assistant = draft.assistant || { provider: 'demo' }, 'assistant', draft));
         else if (cur === 'controls') body = h('div', { class: 'sbody narrow' },
@@ -316,7 +401,7 @@
           h('table', { class: 'keys' }, ...[['W A S D', 'Walk (or stand up)'], ['Shift', 'Hurry'], ['Mouse', 'Look'], ['E', 'Talk / use / sit'], ['F', 'Drink what you are holding'], ['R', 'Discard an empty cup'], ['P', 'Photo mode'], ['Tab', 'Operations board'], ['C / M', 'Call people / meeting'], ['L', 'Open your laptop'], ['Esc', 'Close panel / pause']].map(([k, v]) => h('tr', {}, h('td', {}, h('kbd', {}, k)), h('td', {}, v)))));
         else body = h('div', { class: 'sbody narrow' },
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: draft.security.approveWrites, onchange: e => { draft.security.approveWrites = e.target.checked; } }), 'Ask me before an employee writes any file'),
-          field('Monthly AI token ceiling', h('input', { type: 'number', min: 0, step: 10000, value: draft.security.monthlyTokenLimit || 0, oninput: e => { draft.security.monthlyTokenLimit = Math.max(0, Number(e.target.value) || 0); } }), '0 means no ceiling. Once reported usage reaches this number, new AI calls stop. A call already in progress can take the total over the ceiling.'),
+          field('Monthly AI token ceiling · UTC month', h('input', { type: 'number', min: 0, step: 10000, value: draft.security.monthlyTokenLimit || 0, oninput: e => { draft.security.monthlyTokenLimit = Math.max(0, Number(e.target.value) || 0); } }), '0 means no ceiling. Deskly limits concurrent calls and reserves an estimated allowance before each call. Actual provider token counts can differ; this is a usage guard, not a provider billing limit.'),
           h('p', { class: 'note' }, 'Commands and anything leaving the company (email, publishing, deploys, payments) always need your approval, whatever this is set to.'),
           h('div', { class: 'row' },
             h('button', { class: 'btn', type: 'button', onclick: async () => { const p = await DK.auditExport(); if (p) this.flash('Audit log saved to ' + p); } }, 'Export audit log'),
@@ -325,7 +410,8 @@
           h('button', { class: 'btn danger', type: 'button', onclick: ev => {
             if (ev.target.dataset.sure) { DK.configReset().then(() => location.reload()); return; }
             ev.target.dataset.sure = 1; ev.target.textContent = 'Click again to erase settings and keys';
-          } }, 'Reset Deskly'));
+          } }, 'Reset settings & keys'),
+          h('button', { class: 'btn danger', type: 'button', onclick: async () => { try { await DK.dataErase(); } catch (e) { this.flash(e.message); } } }, 'Erase all Deskly data'));
         s.replaceChildren(h('div', { class: 'settings' },
           h('aside', {}, h('div', { class: 'app-heading' }, mark(), h('span', {}, 'Deskly')), h('h2', {}, 'Settings'), ...Object.entries(tabs).map(([k, l]) => h('button', { type: 'button', class: k === cur ? 'on' : '', onclick: () => { cur = k; render(); } }, l))),
           h('section', {}, h('div', { class: 'shead' }, h('h2', {}, tabs[cur]),
@@ -395,6 +481,8 @@
         h('button', { class: 'mbtn', type: 'button', onclick: () => this.openSettings('team') }, h('b', {}, 'Team & AI keys')),
         h('button', { class: 'mbtn', type: 'button', onclick: () => this.openSettings('controls') }, h('b', {}, 'Settings')),
         h('button', { class: 'mbtn ghost', type: 'button', onclick: () => { this.app.playing = false; this.start(); } }, h('b', {}, 'Main menu'))));
+      this.directoryMenu(s.querySelector('.pausebox'));
+      s.append(h('section', { class: 'pause-controls plate ticks' }, h('span', { class: 'tape dark' }, 'On the floor'), h('h3', {}, 'Know your way around'), ...[['W A S D', 'Move'], ['Mouse', 'Look around'], ['E', 'Talk / interact'], ['G', 'Office map'], ['N', 'Team directory'], ['Tab', 'Operations board'], ['C / M', 'Meeting'], ['L', 'Laptop while seated'], ['H', 'Office guide'], ['Esc', 'Pause / close']].map(([key, label]) => h('div', {}, h('kbd', {}, key), h('span', {}, label)))));
       this.show('screen-pause');
       setTimeout(() => s.querySelector('.mbtn')?.focus(), 30);
     }
@@ -415,7 +503,7 @@
       const setTab = () => { tabName.textContent = (L.file || 'untitled') + (L.dirty ? ' •' : ''); };
       const loadTree = async () => {
         try {
-          const list = await DK.workspaceList('.', 4);
+          const list = await DK.workspaceList('.', 3);
           tree.replaceChildren(...list.map(f => h('button', { type: 'button', class: 'fitem' + (f.dir ? ' dir' : '') + (f.path === L.file ? ' on' : ''), style: `padding-left:${8 + (f.path.split('/').length - 1) * 12}px`, disabled: f.dir, onclick: () => openFile(f.path) }, (f.dir ? '▸ ' : '') + f.path.split('/').pop())));
           if (!list.length) tree.replaceChildren(h('p', { class: 'note' }, 'The folder is empty. Ask someone to build something!'));
         } catch (e) { tree.replaceChildren(h('p', { class: 'note' }, e.message)); }
@@ -439,7 +527,7 @@
       const renderChat = () => {
         chatLog.replaceChildren(...L.chat.map(m => {
           if (m.role === 'user') return h('div', { class: 'me' }, m.content);
-          const el = h('div', { class: 'them md', html: DesklyUI.md(m.content) });
+          const el = h('div', { class: 'them md', markdown: m.content });
           el.querySelectorAll('pre').forEach(pre => pre.append(h('button', { class: 'ins', type: 'button', onclick: () => { const a = ed.selectionStart; ed.setRangeText(pre.innerText.replace(/Insert$/, '').trimEnd() + '\n', a, ed.selectionEnd, 'end'); L.dirty = true; setTab(); ed.focus(); } }, 'Insert')));
           return el;
         }));
@@ -479,12 +567,12 @@
           h('div', { class: 'lcol main' }, h('div', { class: 'lhead' }, tabName, h('button', { class: 'mini', type: 'button', onclick: () => { L.file = null; L.text = ''; ed.value = ''; L.dirty = false; setTab(); } }, 'New'), h('button', { class: 'mini', type: 'button', onclick: save }, 'Save · Ctrl+S')), ed,
             h('div', { class: 'lhead' }, 'Terminal'), termOut, termIn),
           h('div', { class: 'lcol' }, h('div', { class: 'lhead' }, 'Assistant'), chatLog, ask, h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: send }, 'Ask')),
-            h('div', { class: 'lhead' }, 'Delegate to your team'), empSel, delegate,
+            h('div', { class: 'lwork-order slip' }, h('div', { class: 'lhead' }, 'Work order · for the team'), empSel, delegate,
             h('button', { class: 'btn', type: 'button', onclick: () => {
               const e = app.office.byId(empSel.value); const d = delegate.value.trim(); if (!e || !d) return;
               app.runtime.create({ employee: e, description: d + (L.file ? `\n(Related file: ${L.file})` : '') }); delegate.value = '';
               this.flash(`Sent to ${e.name}. They're heading to their desk.`); e.clear(); e.goDesk();
-            } }, 'Send as task')))));
+            } }, 'Send as task'))))));
       ed.value = L.text; setTab(); renderChat(); termOut.textContent = L.term.join('\n');
       loadTree(); if (openPath) openFile(openPath);
       this.show('screen-laptop');
@@ -492,5 +580,6 @@
     }
     closeLaptop() { clearInterval(this.lapTimer); this.app.resume(); }
   }
+  Screens.departmentColor = departmentColor;
   window.DesklyScreens = Screens;
 })();

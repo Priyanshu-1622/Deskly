@@ -245,7 +245,13 @@
         tgt.thighL[0] = tgt.thighR[0] = -1.5; tgt.shinL[0] = tgt.shinR[0] = 1.45; tgt.footL[0] = tgt.footR[0] = 0.05;
         tgt.thighL[2] = 0.06; tgt.thighR[2] = -0.06;
         tgt.spine[0] = -0.05 + br;
-        if (m === 'sitType') {
+        if (m === 'sitMeeting') {
+          // Listeners rest their hands on their thighs, rather than keeping
+          // the workstation typing pose suspended above the meeting table.
+          tgt.upperArmR = [-.08, 0, -.035]; tgt.upperArmL = [-.08, 0, .035];
+          tgt.foreArmR = [-.9, .05, 0]; tgt.foreArmL = [-.9, -.05, 0];
+          tgt.handR = [-.5, 0, 0]; tgt.handL = [-.5, 0, 0];
+        } else if (m === 'sitType') {
           tgt.spine[0] = 0.1 + br; tgt.head[0] = 0.12;
           for (const [sd, sx] of [['R', -1], ['L', 1]]) {
             tgt['upperArm' + sd] = [-0.5, 0, sx * 0.14];

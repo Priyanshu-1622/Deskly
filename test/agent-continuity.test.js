@@ -9,11 +9,12 @@ const { commandFor, parseCliOutput, testCli } = require('../src/main/runtime/cli
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'deskly-continuity-test-'));
 
-test('memory keeps source and verification state across sessions; outdated notes stop entering context', () => {
+test('memory keeps source and verification state across sessions; outdated notes stop entering context', async () => {
   const dataDir = tmp(), project = tmp(), team = new TeamContext(dataDir);
   const note = team.addMemory({ employeeId: 'dev', projectRoot: project, text: 'The auth endpoint returns a token.', source: 'employee', kind: 'fact' });
   assert.equal(note.status, 'unverified');
   team.updateMemory(note.id, 'dev', { status: 'verified', kind: 'decision' });
+  await team.flush();
   const reloaded = new TeamContext(dataDir);
   assert.equal(reloaded.memoriesFor('dev', project)[0].kind, 'decision');
   assert.equal(reloaded.memoriesFor('dev', project)[0].status, 'verified');
@@ -31,7 +32,7 @@ test('interrupted work loads as resumable and completes from its saved turn', as
   const task = { id: 'resume-me', employeeId: 'dev', employeeName: 'Dev', role: 'Developer', title: 'Finish a report', description: 'Finish a report', status: 'running', progress: 0.4, steps: [{ label: 'Finish' }], step: 0, logs: [], files: [], result: null,
     projectId: first.team.projectId(project), claimedFiles: [], usage: { calls: 0, input: 0, output: 0, cached: 0 }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), approvalRequests: [],
     checkpoint: { stage: 'running', tree: '', messages: [{ role: 'user', content: 'AGENT_TURN\nFinish a report' }], nextTurn: 1, inFlight: { name: 'read_file' } } };
-  first.tasks.set(task.id, task); first.save();
+  first.tasks.set(task.id, task); first.save(); await first.flush();
   const second = new Runtime(options);
   assert.equal(second.snapshot().tasks[0].status, 'interrupted');
   assert.equal(second.snapshot().tasks[0].canResume, true);

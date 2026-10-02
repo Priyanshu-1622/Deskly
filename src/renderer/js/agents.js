@@ -68,6 +68,7 @@
       this.color = DEPT_COLOR[def.dept];
       this.meeting = null; this.errand = null;
       this.screenT = 0;
+      this.animationT = [...String(def.id)].reduce((seed,char)=>seed+char.charCodeAt(0),0)%31/930;
     }
     get head() { return new T.Vector3(this.pos.x, this.pos.y + 1.62 * this.rig.s, this.pos.z); }
     taskInfo() { const t = this.ctx.runtime.activeFor(this.id) || (this.state === 'COMPLETED' || this.state === 'FAILED' ? this.ctx.runtime.latestFor(this.id) : null); return t; }
@@ -198,13 +199,14 @@
     }
     atDesk() { return this.posture === 'sit' && this.sitSeat === this.seat; }
     sitMode() {
-      if (this.meeting) return this.meeting.speaking === this ? 'sitTalk' : 'sit';
+      if (this.meeting) return this.meeting.speaking === this ? 'sitTalk' : 'sitMeeting';
       if (this.rig.cup.visible) return 'sitDrink';
       if (this.atDesk() && ['WORKING', 'PLANNING'].includes(this.state)) return 'sitType';
       if (this.atDesk() && this.state === 'AVAILABLE') return (this.ctx.time % 23) < 15 ? 'sitType' : 'sit';
       return this.rig.talking > 0 ? 'sitTalk' : 'sit';
     }
     standMode() {
+      if (this.meeting) return this.meeting.speaking === this ? 'talk' : 'stand';
       if (this.state === 'WAITING_FOR_APPROVAL' && !this.interacting) return 'raise';
       if (this.rig.cup.visible) return 'drink';
       if (this.rig.phone.visible) return 'phone';

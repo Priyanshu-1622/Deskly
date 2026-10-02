@@ -22,8 +22,12 @@
       const sky = DesklyOfficeSky.create(T);
       const indoor = [[8, 16], [20, 16], [31, 16], [43, 16], [54, 16], [8, 31], [17, 31], [28, 31], [40, 31], [53, 31], [20, 5]]
         .map(([x, z]) => { const l = new T.PointLight(0xffe6bf, 0, 13, 2); l.position.set(x, 2.9, z); return l; });
+      // Four permanent rendering slots keep the shader's light count stable
+      // when the player crosses between rooms. Fixture positions stay intact.
+      const indoorSlots = indoor.slice(0,4).map(source => source.clone());
       Object.assign(this, { hemi, sun, fill, moon, sky, indoor, lightingMode: 'day' });
-      this.scene.add(hemi, sun, sun.target, fill, moon, sky.mesh, ...indoor);
+      this.indoorSlots=indoorSlots;
+      this.scene.add(hemi, sun, sun.target, fill, moon, sky.mesh, ...indoorSlots);
       this.doors = []; this.lifts = []; this.screens = [];
       this.setTime(DesklyOfficeTime.info(new Date()));
     }
@@ -56,6 +60,7 @@
       this.fill.intensity = 0.045 + day * 0.09;
       const interior = (1 - smooth(-3, 15, position.elevation)) * (this.lightingMode === 'focus' ? 0.72 : 0.88);
       for (const light of this.indoor) light.intensity = .5 + interior;
+      for (const light of this.indoorSlots) light.intensity = .5 + interior;
       const materials = new Set();
       this.scene.traverse(o => { if (o.isMesh) for (const material of (Array.isArray(o.material) ? o.material : [o.material])) if (material?.isMeshStandardMaterial) materials.add(material); });
       for (const material of materials) {
@@ -69,6 +74,14 @@
 
     setCeoLamp(on) {
       if (this.ceoLamp) this.ceoLamp.intensity = on ? 1.25 : 0;
+    }
+
+    updateIndoorLights(position) {
+      const nearest=this.indoor.map(light=>({light,d:light.position.distanceToSquared(position)})).sort((a,b)=>a.d-b.d);
+      this.indoorSlots.forEach((slot,i)=>{
+        const source=nearest[i];slot.position.copy(source.light.position);
+        slot.intensity=source.d<225?source.light.intensity:0;
+      });
     }
 
     setQuality(quality) {

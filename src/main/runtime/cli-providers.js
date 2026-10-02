@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { cleanEnvironment, stopTree } = require('./process-control');
 
 const CLI = {
   codex_cli: { label: 'Codex CLI (installed login)', command: 'codex' },
@@ -55,20 +56,15 @@ function parseCliOutput(provider, stdout) {
 
 function runProcess(command, args, { input = '', signal, timeoutMs = 240000, cwd, includeStderr = false } = {}) {
   return new Promise((resolve, reject) => {
-    let child, stdout = '', stderr = '', done = false;
+    let child, stdout = '', stderr = '', done = false, stopping = false;
     const finish = (err, value) => {
       if (done) return;
       done = true; clearTimeout(timer); signal?.removeEventListener('abort', abort);
       if (err) reject(err); else resolve(value);
     };
-    const stop = () => {
-      if (!child?.pid) return;
-      if (process.platform === 'win32' && child.spawnfile?.toLowerCase().endsWith('cmd.exe')) {
-        spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
-      } else child.kill();
-    };
-    const abort = () => { stop(); finish(Object.assign(new Error('Cancelled'), { code: 'cancelled' })); };
-    const timer = setTimeout(() => { stop(); finish(new Error('Local CLI timed out. The task can be resumed.')); }, timeoutMs);
+    const stop = async error => { if (done || stopping) return; stopping = true; await stopTree(child); finish(error); };
+    const abort = () => { stop(Object.assign(new Error('Cancelled'), { code: 'cancelled' })); };
+    const timer = setTimeout(() => { stop(new Error('Local CLI timed out. The task can be resumed.')); }, timeoutMs);
     if (signal?.aborted) { abort(); return; }
     signal?.addEventListener('abort', abort, { once: true });
     try {
@@ -78,15 +74,13 @@ function runProcess(command, args, { input = '', signal, timeoutMs = 240000, cwd
       const windowsShim = process.platform === 'win32' && resolved.endsWith('.cmd');
       const executable = windowsShim ? (process.env.ComSpec || 'cmd.exe') : command;
       const launchArgs = windowsShim ? ['/d', '/c', `${command} ${args.map(arg => arg === '' ? '""' : arg).join(' ')}`] : args;
-      const env = { ...process.env };
-      for (const key of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CODEX_ACCESS_TOKEN']) delete env[key];
-      child = spawn(windowsShim ? executable : resolved, launchArgs, { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      child = spawn(windowsShim ? executable : resolved, launchArgs, { cwd, env: cleanEnvironment(), detached: process.platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) { finish(e); return; }
     child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
-    child.stdout.on('data', chunk => { stdout += chunk; if (stdout.length > 3000000) { child.kill(); finish(new Error('Local CLI output exceeded the limit.')); } });
+    child.stdout.on('data', chunk => { if (done || stopping) return; stdout += chunk; if (stdout.length > 3000000) stop(new Error('Local CLI output exceeded the limit.')); });
     child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-4000); });
     child.on('error', e => finish(new Error(`Could not start ${command}. Install it and sign in first. ${e.message}`)));
-    child.on('close', code => code === 0 ? finish(null, includeStderr ? `${stdout}\n${stderr}` : stdout) : finish(new Error(`${command} exited with code ${code}. ${stderr.trim().slice(-700)}`)));
+    child.on('close', code => { if (!stopping) code === 0 ? finish(null, includeStderr ? { stdout, stderr } : stdout) : finish(new Error(`${command} exited with code ${code}. ${stderr.trim().slice(-700)}`)); });
     child.stdin.on('error', () => {});
     child.stdin.end(input);
   });
@@ -105,14 +99,15 @@ async function chatCli(profile, input, signal, onUsage, run = runProcess) {
   } finally { fs.rmSync(scratch, { recursive: true, force: true }); }
 }
 
-async function testCli(profile, run = runProcess) {
+async function testCli(profile, run = runProcess, signal) {
   const { command } = commandFor(profile);
   const args = profile.provider === 'codex_cli' ? ['login', 'status'] : ['auth', 'status'];
   const start = Date.now();
-  const output = await run(command, args, { timeoutMs: 15000, includeStderr: true });
+  const result = await run(command, args, { timeoutMs: 15000, includeStderr: true, signal });
+  const output = typeof result === 'string' ? result : profile.provider === 'claude_code' ? result.stdout : `${result.stdout}\n${result.stderr}`;
   if (profile.provider === 'claude_code' && !JSON.parse(output).loggedIn) throw new Error('Claude Code is installed but not signed in. Run claude in a terminal and sign in.');
   if (profile.provider === 'codex_cli' && !/logged in/i.test(output)) throw new Error('Codex is installed but not signed in. Run codex login in a terminal.');
   return { ok: true, ms: Date.now() - start, sample: `${CLI[profile.provider].label} is signed in` };
 }
 
-module.exports = { CLI, commandFor, parseCliOutput, chatCli, testCli };
+module.exports = { CLI, commandFor, parseCliOutput, chatCli, testCli, runProcess };

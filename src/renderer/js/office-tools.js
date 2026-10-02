@@ -32,5 +32,6 @@
     const oldEnter=app.enterOffice;app.enterOffice=function(...args){oldEnter(...args);if(app.playing&&!localStorage.getItem('deskly.guide.seen'))ui.openGuide();};
     app.freeboards={load,persist,cache,surfaces};
   }
-  window.DesklyOfficeTools={install};
+  async function erase(){if(db){(await db).close();db=null;}return new Promise((resolve,reject)=>{const request=indexedDB.deleteDatabase('deskly-freeboards');request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Close other Deskly preview tabs before erasing whiteboards.'));});}
+  window.DesklyOfficeTools={install,erase};
 })();

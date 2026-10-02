@@ -36,8 +36,8 @@ test('existing structure is adopted without moving current files', () => {
   assert.equal(inspect(new Workspace(root)).areas.backend, 'apps/api');
 });
 
-test('new files outside an employee area are refused while existing integration files can be edited', async () => {
-  const root = tmp(), cfg = { workspace: root, employees: [{ id: 'front', name: 'A', role: 'Frontend Developer' }] };
+test('new files outside an employee area are refused while existing integration files need approval', async () => {
+  const root = tmp(), cfg = { security: { approveWrites: false }, workspace: root, employees: [{ id: 'front', name: 'A', role: 'Frontend Developer' }] };
   const rt = new Runtime({ dataDir: tmp(), getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: () => {} });
   const task = { employeeId: 'front', employeeName: 'A', role: 'Frontend Developer', provider: 'openai', projectId: rt.team.projectId(root), projectMap: inspect(new Workspace(root)), workArea: 'frontend', claimedFiles: [], files: [], logs: [] };
   const ws = new Workspace(root);
@@ -47,6 +47,9 @@ test('new files outside an employee area are refused while existing integration 
   const written = await rt.tool(task, ws, { name: 'write_file', args: { path: 'frontend/App.js', content: 'ok' } });
   assert.match(written, /Wrote frontend\/App.js/);
   fs.writeFileSync(path.join(root, 'backend', 'existing.js'), 'old');
+  let action; rt.approve = async (_task, proposed) => { action = proposed; return true; };
   const edited = await rt.tool(task, ws, { name: 'write_file', args: { path: 'backend/existing.js', content: 'new' } });
   assert.match(edited, /Wrote backend\/existing.js/);
+  assert.equal(action.content, 'new');
+  assert.equal(action.risk, 'high');
 });

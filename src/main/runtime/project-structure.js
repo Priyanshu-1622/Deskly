@@ -12,19 +12,25 @@ const CANDIDATES = {
 };
 
 function validArea(value) {
-  const area = String(value || '').replace(/\\/g, '/').replace(/\/$/, '');
-  if (!area || area === '.' || path.posix.isAbsolute(area) || area.split('/').some(p => !p || p === '.' || p === '..') || /[:\0]/.test(area)) throw new Error('Invalid project area path.');
+  if (typeof value !== 'string' || value.length > 200) throw new Error('Project areas must be text paths.');
+  const area = value.replace(/\\/g, '/').replace(/\/$/, '');
+  if (!area || area === '.' || path.posix.isAbsolute(area) || area.split('/').some(p => !p || p.startsWith('.') || p.toLowerCase() === 'node_modules' || /[. ]$|~\d/.test(p)) || /[:\x00-\x1f]/.test(area)) throw new Error('Invalid project area path.');
   return area;
 }
+function validateMap(map) {
+  if (!map || typeof map !== 'object' || !map.areas || typeof map.areas !== 'object' || Array.isArray(map.areas)) throw new Error('Invalid project map.');
+  const areas = {};
+  for (const name of AREAS) areas[name] = validArea(map.areas[name] === undefined ? DEFAULTS[name] : map.areas[name]);
+  return { ...map, version: 1, areas };
+}
+function fingerprint(map) { return require('crypto').createHash('sha256').update(JSON.stringify(validateMap(map).areas)).digest('hex'); }
 
 function inspect(ws) {
   ws.ensure();
   const file = ws.resolve('deskly.project.json');
   if (fs.existsSync(file)) {
-    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const areas = {};
-    for (const name of AREAS) areas[name] = validArea(saved.areas?.[name] || DEFAULTS[name]);
-    return { version: 1, areas, source: 'saved' };
+    try { return validateMap({ ...JSON.parse(fs.readFileSync(file, 'utf8')), source: 'saved' }); }
+    catch (e) { return { version: 1, areas: { ...DEFAULTS }, source: 'fallback', warning: `deskly.project.json could not be used: ${e.message} Safe default areas are active. The original file was left untouched.` }; }
   }
   const entries = fs.readdirSync(ws.root).filter(name => !['.git', 'node_modules', 'deskly-output', '.DS_Store'].includes(name));
   const empty = entries.length === 0;
@@ -59,11 +65,13 @@ function guidance(map, area) {
 }
 
 function allowNewFile(map, area, relative) {
-  const p = String(relative || '').replace(/\\/g, '/');
-  const home = map.areas[area];
+  map = validateMap(map);
+  const normalize = s => process.platform === 'win32' ? s.toLowerCase() : s;
+  const p = normalize(String(relative || '').replace(/\\/g, '/'));
+  const home = normalize(map.areas[area]);
   if (p.startsWith(home + '/')) return true;
-  if (p.startsWith(map.areas.shared + '/') && ['frontend', 'backend'].includes(area)) return true;
-  return ['package.json', 'package-lock.json', 'README.md', '.gitignore', 'tsconfig.json', 'vite.config.js', 'vite.config.ts', 'docker-compose.yml', 'compose.yml'].includes(p);
+  if (p.startsWith(normalize(map.areas.shared) + '/') && ['frontend', 'backend'].includes(area)) return true;
+  return ['package.json', 'package-lock.json', 'README.md', '.gitignore', 'tsconfig.json', 'vite.config.js', 'vite.config.ts', 'docker-compose.yml', 'compose.yml'].map(normalize).includes(p);
 }
 
-module.exports = { inspect, areaFor, guidance, allowNewFile };
+module.exports = { inspect, areaFor, guidance, allowNewFile, validArea, validateMap, fingerprint, AREAS };

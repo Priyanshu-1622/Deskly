@@ -10,6 +10,12 @@
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   stage.appendChild(renderer.domElement);
+  let contextNotice;
+  renderer.domElement.addEventListener('webglcontextlost', event => {
+    event.preventDefault(); contextNotice = document.createElement('div'); contextNotice.className = 'screen'; contextNotice.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;place-content:center;background:#171a15;color:white;text-align:center';
+    const title = document.createElement('h2'); title.textContent = 'Recovering office graphics'; const message = document.createElement('p'); message.textContent = 'Your agent tasks are safe. Reload the office if graphics do not return.'; const retry = document.createElement('button'); retry.className='btn primary'; retry.textContent='Reload office'; retry.onclick=()=>location.reload(); contextNotice.append(title,message,retry); document.body.append(contextNotice);
+  });
+  renderer.domElement.addEventListener('webglcontextrestored', () => location.reload());
   const performanceBudget = new DesklyPerformance(renderer);
   renderer.shadowMap.autoUpdate = false;
   const camera = new T.PerspectiveCamera(70, 1, 0.05, 240);
@@ -22,7 +28,7 @@
   window.__deskly = app;
   const screens = new DesklyScreens(app); app.screens = screens;
   const bar = $('#bootBar'), bootMsg = $('#bootMsg');
-  const boot = (p, m) => { bar.style.width = Math.round(p * 100) + '%'; if (m) bootMsg.textContent = m; };
+  const boot = (p, m) => { const percent = Math.round(p * 100); bar.style.width = percent + '%'; $('#bootPercent').textContent = String(percent).padStart(2, '0'); if (m) bootMsg.textContent = m; };
 
   let data;
   try {
@@ -49,6 +55,18 @@
   const runtime = new DesklyRuntime.RuntimeClient(bus, msg => app.ui?.toast(msg, '#f0a020'));
   Object.assign(app, { bus, audit, runtime });
   await runtime.init();
+  // Compile the actual lighting and character variants behind the loading
+  // screen, before first-person movement can encounter a cold shader.
+  boot(.95, 'Preparing graphics…');
+  const warmRigs = DesklyHumanAssets.models().map(entry=>DesklyHumanAssets.build({assetId:entry.id})).filter(Boolean);
+  for(const rig of warmRigs)world.scene.add(rig.root);
+  world.setQuality(screens.settings().quality||'balanced');
+  world.updateIndoorLights(camera.position);
+  renderer.compile(world.scene,camera);
+  // Retain these two material sets so compiling them is not immediately
+  // undone by Three.js releasing their cached shader programs.
+  for(const rig of warmRigs)world.scene.remove(rig.root);
+  app.graphicsWarmups=warmRigs;
   const bootEl = $('#boot'); bootEl.classList.add('gone'); setTimeout(() => bootEl.remove(), 600);
 
   app.refreshClock = () => {
@@ -282,7 +300,9 @@
   let last = performance.now(), hudT = 0, mmT = 0, panelT = 0, skyT = 0, shiftT = 0, attract = 0;
   function frame(now) {
     const rawDt=(now-last)/1000,dt=Math.min(.05,rawDt);last=now;
-    performanceBudget.update(rawDt,!document.hidden&&app.playing);
+    const screen = document.body.dataset.screen;
+    const sceneVisible = !document.hidden && !['screen-setup', 'screen-settings'].includes(screen);
+    performanceBudget.update(rawDt,sceneVisible);
     skyT -= dt;
     if (skyT <= 0) { skyT = app.timeMode === 'preview' ? .5 : 5; app.refreshClock(); }
     if (app.office) {
@@ -297,8 +317,8 @@
     app.campus.update(dt);
     if (!app.office || (!app.playing && document.body.dataset.screen === 'screen-start')) {
       attract += dt * 0.05;
-      camera.position.set(30 + Math.cos(attract) * 34, 17 + Math.sin(attract * 0.7) * 3, 18 + Math.sin(attract) * 24);
-      camera.lookAt(30, 0.5, 18);
+      camera.position.set(30 + Math.cos(attract) * 34, 17 + Math.sin(attract * .7) * 3, 18 + Math.sin(attract) * 24);
+      camera.lookAt(30, .5, 18);
     }
     world.sky.mesh.position.copy(camera.position);
     world.sky.uniforms.drift.value = (now * 0.000002) % 1;
@@ -307,17 +327,19 @@
     $('#hud').hidden = !app.playing; $('#seatbar').hidden = !(app.playing && player.seated);
     const heldbar = $('#heldbar'), held = player.heldDrink;
     heldbar.hidden = !app.playing || !held;
-    if (held && heldbar.dataset.drink !== held.type+held.remaining) {heldbar.dataset.drink=held.type+held.remaining;heldbar.innerHTML = `<b>${held.type === 'coffee' ? 'COFFEE' : 'WATER'}</b><span>${'●'.repeat(Math.max(0, held.remaining))}${'○'.repeat(Math.max(0, held.max - held.remaining))}</span><kbd>F</kbd> drink <kbd>R</kbd> discard`;}
+    if (held && heldbar.dataset.drink !== held.type+held.remaining) { heldbar.dataset.drink=held.type+held.remaining; const title=document.createElement('b'), count=document.createElement('span'), key=document.createElement('kbd'), discard=document.createElement('kbd'); title.textContent=held.type==='coffee'?'COFFEE':'WATER';count.textContent='●'.repeat(Math.max(0,held.remaining))+'○'.repeat(Math.max(0,held.max-held.remaining));key.textContent='F';discard.textContent='R';heldbar.replaceChildren(title,count,key,' drink ',discard,' discard'); }
     $('#control-hint').hidden = !app.playing || player.locked || player.touch;
     if(app.office&&app.playing){app.tagT=(app.tagT||0)-dt;if(app.tagT<=0){app.tagT=1/30;ui.tagsUpdate(camera);}}else if(ui.tags.size){$('#tags').replaceChildren();ui.tags.clear();}
     hudT -= dt; mmT -= dt; panelT -= dt;
     if (app.office && hudT <= 0) { hudT = 0.5; ui.counters(); ui.clock(app.clockInfo, app.timeMode === 'preview'); drawCeo();const status=$('#building-status');status.hidden=!app.playing||screens.settings().showFps===false;status.textContent=performanceBudget.fps+' FPS'; }
     if (app.office && app.playing && mmT <= 0) { mmT = 0.2; ui.minimap(player, app.office.employees); }
     if (panelT <= 0) { panelT = 0.33; ui.tick(); }
-    if(app.office){app.lightT=(app.lightT||0)-dt;if(app.lightT<=0){app.lightT=.5;const lamps=world.indoor.map(l=>({l,d:l.position.distanceToSquared(camera.position)})).sort((a,b)=>a.d-b.d);lamps.forEach(({l,d},i)=>l.visible=i<4&&d<225);}}
-    world.setShadowFocus(camera.position);
-    performanceBudget.shadow(dt,!document.hidden);
-    renderer.render(world.scene, camera);
+    app.lightT=(app.lightT||0)-dt;if(app.lightT<=0){app.lightT=.5;world.updateIndoorLights(camera.position);}
+    if (sceneVisible) {
+      world.setShadowFocus(camera.position);
+      performanceBudget.shadow(dt,true);
+      renderer.render(world.scene, camera);
+    }
     requestAnimationFrame(frame);
   }
   app.applySettings = app.applySettings;

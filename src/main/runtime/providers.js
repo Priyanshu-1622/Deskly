@@ -17,15 +17,61 @@ class ProviderError extends Error {
   constructor(message, code) { super(message); this.code = code; }
 }
 const tokenCount = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+function endpointFor(profile) {
+  const p = PROVIDERS[profile.provider];
+  if (!p) throw new ProviderError('Unknown AI provider.', 'config');
+  if (p.localCli || profile.provider === 'demo') return profile.provider;
+  const raw = profile.provider === 'anthropic' ? 'https://api.anthropic.com/v1' : ['custom', 'ollama'].includes(profile.provider) ? (profile.baseUrl || p.baseUrl) : p.baseUrl;
+  let url;
+  try { url = new URL(raw); } catch { throw new ProviderError('Set a valid provider base URL.', 'config'); }
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.username || url.password || url.search || url.hash || !(url.protocol === 'https:' || (url.protocol === 'http:' && local))) throw new ProviderError('Provider URLs require HTTPS, except HTTP on localhost. Credentials, query strings and fragments are not allowed.', 'config');
+  return url.href.replace(/\/+$/, '');
+}
+
+function bindTestProfile(request, saved, key) {
+  const p = { ...request };
+  if (!p.apiKey && saved && p.provider === (saved.provider || 'demo') && endpointFor(p) === endpointFor({ ...saved, provider: saved.provider || 'demo' })) p.apiKey = key || '';
+  return p;
+}
 
 async function httpJSON(url, opts, signal) {
+  const ctl = new AbortController();
+  const abort = () => ctl.abort(signal?.reason);
+  if (signal?.aborted) abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(() => ctl.abort(new Error('Provider request timed out.')), 120000);
+  try { return await requestJSON(url, opts, ctl.signal, signal); }
+  finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+}
+async function requestJSON(url, opts, signal, callerSignal) {
   let res;
-  try { res = await fetch(url, { ...opts, signal }); }
+  for (let attempt = 0; attempt < 3; attempt++) {
+  try { res = await fetch(url, { ...opts, signal, redirect: 'error' }); }
   catch (e) {
-    if (e.name === 'AbortError') throw new ProviderError('Cancelled', 'cancelled');
+    if (signal.aborted) throw new ProviderError(callerSignal?.aborted ? 'Cancelled' : 'Provider request timed out.', callerSignal?.aborted ? 'cancelled' : 'timeout');
     throw new ProviderError(`Could not reach ${new URL(url).host}. Check your connection.`, 'network');
   }
-  const text = await res.text();
+  if (!(res.status === 429 || res.status >= 500) || attempt === 2) break;
+  const retry = res.headers?.get('retry-after');
+  const seconds = Number(retry);
+  const delay = Math.min(10000, Math.max(0, retry && !Number.isFinite(seconds) ? Date.parse(retry) - Date.now() : retry ? seconds * 1000 : 500 * 2 ** attempt));
+  await res.body?.cancel();
+  await new Promise((resolve, reject) => {
+    const onAbort = () => { clearTimeout(t); signal.removeEventListener('abort', onAbort); reject(new ProviderError(callerSignal?.aborted ? 'Cancelled' : 'Provider request timed out.', callerSignal?.aborted ? 'cancelled' : 'timeout')); };
+    const t = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(); }, delay);
+    if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  }
+  let text = '';
+  if (res.body?.getReader) {
+    const reader = res.body.getReader(); let bytes = 0;
+    try {
+      const decoder = new TextDecoder();
+      while (true) { const { done, value } = await reader.read(); if (done) break; bytes += value.byteLength; if (bytes > 3000000) { await reader.cancel(); throw new ProviderError('Provider response exceeded 3 MB.', 'response_size'); } text += decoder.decode(value, { stream: true }); }
+      text += decoder.decode();
+    } catch (e) { if (signal.aborted) throw new ProviderError(callerSignal?.aborted ? 'Cancelled' : 'Provider request timed out.', callerSignal?.aborted ? 'cancelled' : 'timeout'); throw e; }
+  } else { text = await res.text(); if (Buffer.byteLength(text) > 3000000) throw new ProviderError('Provider response exceeded 3 MB.', 'response_size'); }
   let body = null; try { body = JSON.parse(text); } catch { }
   if (!res.ok) {
     const msg = body?.error?.message || body?.message || text.slice(0, 200);
@@ -36,6 +82,7 @@ async function httpJSON(url, opts, signal) {
       : ({ auth: 'The API key was rejected. Update it in Settings → Team.', rate_limited: 'The provider is rate limiting this key. Try again in a minute.', not_found: `Model or endpoint not found: ${msg}` }[code] || `Provider error (${res.status}): ${msg}`);
     throw new ProviderError(human, code);
   }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ProviderError('Provider returned an invalid JSON response.', 'invalid_json');
   return body;
 }
 
@@ -44,7 +91,8 @@ async function httpJSON(url, opts, signal) {
  * profile: { provider, model, baseUrl, apiKey }
  */
 async function chat(profile, { system, messages, maxTokens = 2048 }, signal, onUsage) {
-  const p = PROVIDERS[profile.provider] || PROVIDERS.demo;
+  const endpoint = endpointFor(profile);
+  const p = PROVIDERS[profile.provider];
   const model = profile.model || p.defaultModel;
   if (profile.provider === 'demo') return demoReply(system, messages);
   if (p.localCli) return chatCli(profile, { system, messages, maxTokens }, signal, onUsage);
@@ -58,7 +106,7 @@ async function chat(profile, { system, messages, maxTokens = 2048 }, signal, onU
     try { onUsage?.({ input: tokenCount(body.usage?.input_tokens) + tokenCount(body.usage?.cache_creation_input_tokens) + tokenCount(body.usage?.cache_read_input_tokens), output: tokenCount(body.usage?.output_tokens), cached: tokenCount(body.usage?.cache_read_input_tokens) }); } catch { }
     return (body.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
   }
-  const base = (profile.baseUrl || p.baseUrl || '').replace(/\/$/, '');
+  const base = endpoint;
   if (!base) throw new ProviderError('Set a base URL for this custom provider.', 'config');
   const headers = { 'content-type': 'application/json' };
   if (profile.apiKey) headers.authorization = `Bearer ${profile.apiKey}`;
@@ -74,10 +122,21 @@ async function chat(profile, { system, messages, maxTokens = 2048 }, signal, onU
 
 function parseJSON(text) {
   const t = String(text).trim();
+  try { const direct = JSON.parse(t); if (!direct || typeof direct !== 'object' || Array.isArray(direct)) throw new ProviderError('The model must reply with a JSON object.', 'invalid_json'); return direct; }
+  catch (e) { if (e instanceof ProviderError) throw e; }
   const tries = [t, (t.match(/```(?:json)?\s*([\s\S]*?)```/) || [])[1]];
-  const a = t.search(/[[{]/), b = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
-  if (a >= 0 && b > a) tries.push(t.slice(a, b + 1));
-  for (const s of tries) { if (!s) continue; try { return JSON.parse(s); } catch { } }
+  // Balance braces while respecting quoted strings; prose like "Step [1]" is harmless.
+  for (let start = t.indexOf('{'), attempts = 0; start >= 0 && attempts < 8; start = t.indexOf('{', start + 1), attempts++) {
+    let depth = 0, quoted = false, escaped = false;
+    for (let i = start; i < t.length; i++) {
+      const c = t[i];
+      if (quoted) { if (escaped) escaped = false; else if (c === '\\') escaped = true; else if (c === '"') quoted = false; continue; }
+      if (c === '"') quoted = true;
+      else if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) { tries.push(t.slice(start, i + 1)); break; }
+    }
+  }
+  for (const s of tries) { if (!s) continue; try { const value = JSON.parse(s); if (value && typeof value === 'object' && !Array.isArray(value)) return value; } catch { } }
   throw new ProviderError('The model replied with something that is not valid JSON.', 'invalid_json');
 }
 
@@ -100,12 +159,12 @@ function demoReply(system, messages) {
   return 'I\'m running in demo mode. Give me an API key in Settings → Team and I can really help.';
 }
 
-async function testProfile(profile) {
-  if (PROVIDERS[profile.provider]?.localCli) return testCli(profile);
+async function testProfile(profile, signal) {
+  if (PROVIDERS[profile.provider]?.localCli) return testCli(profile, undefined, signal);
   const t0 = Date.now();
-  const text = await chat(profile, { system: 'Reply with the single word: ready', messages: [{ role: 'user', content: 'Say ready.' }], maxTokens: 256 });
+  const text = await chat(profile, { system: 'Reply with the single word: ready', messages: [{ role: 'user', content: 'Say ready.' }], maxTokens: 256 }, signal);
   if (!text.trim()) throw new ProviderError('The provider returned no text. Try another model or test again.', 'empty_response');
   return { ok: true, ms: Date.now() - t0, sample: text.slice(0, 40) };
 }
 
-module.exports = { PROVIDERS, chat, parseJSON, testProfile, ProviderError };
+module.exports = { PROVIDERS, chat, parseJSON, testProfile, ProviderError, endpointFor, bindTestProfile };

@@ -7,7 +7,7 @@
 [![CI](https://github.com/Priyanshu-1622/Deskly/actions/workflows/ci.yml/badge.svg)](https://github.com/Priyanshu-1622/Deskly/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/github/package-json/v/Priyanshu-1622/Deskly?label=version&color=f2c230)
 ![License](https://img.shields.io/github/license/Priyanshu-1622/Deskly?color=6aa981)
-![Electron](https://img.shields.io/badge/Electron-38-47848f?logo=electron&logoColor=white)
+![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron&logoColor=white)
 ![Status](https://img.shields.io/badge/status-prototype-f2c230)
 [![Last commit](https://img.shields.io/github/last-commit/Priyanshu-1622/Deskly?color=718b65)](https://github.com/Priyanshu-1622/Deskly/commits/main)
 
@@ -37,6 +37,17 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
   <tr><td><b>A changing office day.</b> Regional time drives sun, clouds, sunset and night.</td><td><b>Your private workspace.</b> Use the laptop, whiteboard, coffee station and briefing area.</td></tr>
 </table>
 
+<p align="center">
+  <img src="docs/screenshots/shared-discussion.png" alt="Current shared meeting conversation with participant selection and attributed demo replies" width="100%">
+  <br><sub>One conversation for the room. Select who replies, keep shared history, and save confirmed decisions. This screenshot uses demo replies.</sub>
+</p>
+
+<details>
+  <summary>See the redesigned menu and team settings</summary>
+  <br><img src="docs/screenshots/front-desk.png" alt="Current Deskly main menu with yellow selection and company activity counters" width="100%">
+  <br><img src="docs/screenshots/team-and-providers.png" alt="Current team settings with visible provider and team, skills and appearance tabs" width="100%">
+</details>
+
 <details>
   <summary>Explore the current office and updated employees</summary>
   <br><img src="docs/screenshots/meeting-wide.png" alt="The current detailed employee models gathered in the original boardroom" width="100%">
@@ -60,19 +71,26 @@ Deskly is an open-source, first-person **desktop app** built with Electron. You 
 | Freeboards | Add local images, notes and links to movable, resizable cards. Boards save on your device and show their contents in the 3D office. Open them from the laptop, map or physical board. |
 | First day | An optional introduction explains movement, projects, approvals, meetings and shifts. Replay it any time with H or F1. |
 | Your team | Hire from role presets, edit work instructions and appearance, and inspect a skills and knowledge resume for each employee. |
+| Group discussions | Talk to everyone in a meeting or a small group in your CEO office. Post without AI calls, select who replies, and let speakers read one another's earlier replies. Stop a round, reopen saved project conversations, and save confirmed decisions to every participant's project memory. |
 | AI providers | Configure Anthropic, OpenAI, Gemini, OpenRouter, Ollama, an OpenAI-compatible endpoint, or an installed Codex or Claude Code login per employee. The laptop assistant can use a separate setup. |
 | Project work | Assign tasks against one selected project folder. Deskly records a project map and gives each role a home for new files, such as frontend/ or backend/. Existing layouts are adopted without moving files. Interrupted work can resume from its saved checkpoint. |
-| Coordination | Keep typed project notes with verification status, approved cross-project notes, file claims, and teammate handoffs with contracts and dependencies. Relevant memory is retrieved for active tasks. |
+| Coordination | Keep typed project notes with verification status, approved cross-project notes, file claims, and teammate handoffs with contracts and dependencies. Only verified memory enters active-task prompts; pending notes stay visible for founder review. |
 | Cost controls | Use an optional lightweight model for planning and conversation, see provider usage, and set a monthly token ceiling. The target of 60–70% savings is **not yet measured**. |
-| Oversight | Review shell commands and external action requests before approval. See current tasks and an audit log on the operations board. |
+| Oversight | Review full file content, shell commands and external action requests before approval. Sensitive configuration edits always require review. See current tasks and an audit log on the operations board. |
 
 Each role ships with a detailed default playbook, and you can replace it for any employee in **Team & AI keys → Work instructions**. [Read the agent architecture](AGENT_ARCHITECTURE.md) for memory, coordination, and cost details.
 
-The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The restored office passes 49 automated checks and the desktop playtest gathers all 15 employees in the original boardroom without renderer errors.
+The original single-floor office is retained, with outdoor grounds, streets, parked cars, trees, courtyard seating and a fountain. [Outdoor grounds and performance details](docs/OUTDOOR-GROUNDS.md). Automatic rendering scale, shared outdoor geometry, batched trees, fewer simultaneous lights and reduced distant skeleton and HUD updates help keep movement smooth. Detailed employee models, face and hair customization, corrected walking and neck poses, staggered recalls, glass skylights, refined CEO furniture, CLI sign-ins, resumable tasks, verified memory, structured project areas and office sounds remain available. The current source passes 86 automated checks. A desktop discussion check covers all 15 employees, selected replies, shared decisions, a two-person CEO discussion, a missing API key, and reopening history without renderer errors.
+
+### Lead a shared discussion
+
+Press **C** or **M**, choose a room and participants, and call them over. Press **C** or **M** again to open the shared conversation. **Post to everyone** saves your message without calling AI. Select speakers and choose **Discuss with selected** for one reply each, in order; later speakers see earlier replies. Leave the composer empty to discuss your latest posted message. Nothing starts an endless automatic conversation.
+
+Use **Save shared decision** for facts the group has agreed on; these enter each participant's verified memory for the selected project. Ordinary suggestions stay in the conversation history. **Stop discussion** cancels the round; **End and save meeting** keeps the transcript and existing room notes. The saved conversation selector shows discussions with the same room and participants in the current project. This feature discusses work; assign executable tasks through the employee task controls.
 
 ## Get started
 
-You need **Node.js 22+** and npm. Windows is the currently tested desktop target; macOS and Linux package targets are configured but still need verification.
+You need **Node.js 22.13+** and npm. Windows is the currently tested desktop target; macOS and Linux package targets are configured but still need verification.
 
 ```bash
 git clone https://github.com/Priyanshu-1622/Deskly.git
@@ -86,12 +104,16 @@ On first launch, the setup wizard asks for your name, company, project folder, t
 When you assign the first task in a project, Deskly creates `deskly.project.json` in that project's root. A new empty project also gets `frontend/`, `backend/`, `shared/`, `docs/`, and `operations/`. For an existing project, the map uses recognized folders such as `apps/web` and `apps/api` and leaves existing files in place. You can edit the paths in `deskly.project.json` for your layout; the next task reads the updated map. Each task card shows its assigned area. New files must go in that area or an agreed shared/configuration path; employees can still edit existing files when integration requires it.
 
 ```bash
-npm test          # automated runtime and UI tests
+npm run check     # lint plus automated runtime and UI tests
+npm run smoke     # isolated desktop rendering check
+npm audit         # include desktop/build dependencies
 npm run dev       # app with developer tools
 npm run dist:win  # build the Windows installer into dist/
 ```
 
 The repository also declares `dist:mac` and `dist:linux` targets. Run those on their respective platforms once packaging has been verified there.
+
+Source pushes run checks without packaging or uploading an app. Packaging workflows require a manual dispatch. Old local installers and unpacked apps are excluded from the repository; use the source instructions above until a new approved package is released.
 
 ### Controls
 
@@ -134,11 +156,13 @@ Idle office animations make no AI calls. Assigned work, employee conversations, 
 ## Safety and current limits
 
 - Project file tools stay within the chosen folder and reject symbolic link paths and common secret filenames. This does **not** sandbox the entire app.
-- API keys are encrypted with Electron `safeStorage`; saving a key fails if secure storage is unavailable.
-- Approved shell commands run with your OS permissions and can reach outside the project folder. Read the full command before approving it.
+- API keys are encrypted with Electron `safeStorage` and bound to their provider and endpoint. Changing the endpoint requires a matching key; a previous key is not forwarded. Saving a key fails if secure storage is unavailable.
+- Approved shell commands run with your OS permissions and can reach outside the project folder. Review the full command and working directory. Secret environment variables are excluded; cancellation and quit stop the process tree.
 - Email, publishing, deployment, and payment requests are approval-gated and recorded. Deskly does not execute those external actions yet.
 - Default employees use textured, skinned character models with procedural animation. Further clothing options, facial animation, and movement refinement are still in progress.
-- Deskly is a prototype. Review the implementation and keep backups before allowing it to edit an important project.
+- New offices request approval for file writes by default. Sensitive configuration and existing files outside the assigned area always require review.
+- Damaged local data is preserved for recovery; interrupted checkpoints expire after three days. Privacy settings can erase all Deskly data while keeping project files.
+- Deskly is a prototype. Review the implementation and keep backups before allowing it to edit an important project. [Release gates and update policy](RELEASE_POLICY.md) describe the remaining signing, platform and live-provider checks.
 
 Deskly now includes detailed, customizable employee models with textured faces, eyes, hair and clothing; authored exterior trees; and a full roof with glass skylights. The CEO workstation has detailed furniture, dedicated leather maps, filtered reflections and sun shadows. Further wardrobe, facial animation and wider furniture refinement are in progress. [See the realism direction](docs/REALISM_DIRECTION.md) and [asset credits / character intake](docs/ASSET_CREDITS.md) for the current scope and source assets.
 

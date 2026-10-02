@@ -25,18 +25,19 @@
     const item = loaded.get(selected); if (!item) return null;
     const { entry, asset, bounds, height } = item;
     const model = asset.scene.clone(true), copies = new Map();
+    const sharedGeometry = new Set();asset.scene.traverse(o=>{if(o.geometry)sharedGeometry.add(o.geometry);});
     const originals = [], clones = []; asset.scene.traverse(o => originals.push(o)); model.traverse(o => clones.push(o));
     originals.forEach((o, i) => copies.set(o, clones[i]));
     originals.forEach(o => {
       const m = copies.get(o);
-      if (m.isMesh) { m.geometry = o.geometry.clone(); m.castShadow = !/^Hair_|Eyeballs|Eyebrows/.test(m.name);m.receiveShadow = true;m.frustumCulled=true; }
+      if (m.isMesh) { m.geometry = o.geometry; m.castShadow = !/^Hair_|Eyeballs|Eyebrows/.test(m.name);m.receiveShadow = true;m.frustumCulled=true; }
       if (m.isSkinnedMesh) { m.skeleton = o.skeleton.clone(); m.skeleton.bones = o.skeleton.bones.map(b => copies.get(b)); m.bind(m.skeleton, o.bindMatrix); }
     });
     const root = new T.Group(), s = (Number(look.height) || 1.75) / 1.75;
     root.scale.setScalar(s); root.add(model);
     const normalize=entry.driver==='deskly'?1:1.75/height;
     model.scale.setScalar(normalize); model.position.y = -bounds.min.y * normalize; model.rotation.y = entry.facingYaw || 0;
-    if(entry.driver==='deskly')return buildDriven(root,model,look,s,item.skinMaterials);
+    if(entry.driver==='deskly')return buildDriven(root,model,look,s,item.skinMaterials,sharedGeometry);
     const mixer = new T.AnimationMixer(model), actions = new Map();
     for (const [mode, name] of Object.entries(entry.clips || {})) {
       const clip = asset.animations.find(c => c.name === name); if (clip) actions.set(mode, mixer.clipAction(clip));
@@ -48,7 +49,7 @@
     props.root.traverse(o => o.geometry?.dispose());
     let active, mode = 'stand';
     const rig = { root, s, cup, phone, seatH: .5, speed: 0, talking: 0, look: null,
-      dispose(){root.traverse(o=>{o.geometry?.dispose();o.skeleton?.dispose();});},
+      dispose(){root.traverse(o=>{if(o.geometry&&!sharedGeometry.has(o.geometry))o.geometry.dispose();o.skeleton?.dispose();});},
       setMode(next) {
         mode = next;
         const action = actions.get(next) || actions.get(next.startsWith('sit') ? 'sit' : next === 'run' ? 'walk' : 'stand');
@@ -56,6 +57,7 @@
         action.reset().play(); if (active) { active.fadeOut(.2); action.fadeIn(.2); } active = action;
       },
       update(dt) {
+        this.talking=Math.max(0,this.talking-dt);
         const seated = mode.startsWith('sit');
         root.position.y = seated ? this.seatH - (entry.referenceSeatHeight || .5) * s : 0;
         if (active) active.timeScale = mode === 'run' ? 1.6 : 1;
@@ -64,7 +66,7 @@
     };
     rig.setMode('stand'); return rig;
   }
-  function buildDriven(root,model,look,s,skinMaterials) {
+  function buildDriven(root,model,look,s,skinMaterials,sharedGeometry) {
     // The existing behaviour animator drives an authored skin; its primitive
     // meshes never enter the visible scene. Each employee retains a private rig.
     const driver=Human.build({...look,height:1.75}), temporary=driver.root;
@@ -72,8 +74,15 @@
     temporary.traverse(o=>o.geometry?.dispose());
     const materials=new Map();model.traverse(o=>{if(o.isMesh){const original=o.material;if(!materials.has(original))materials.set(original,original.clone());o.material=materials.get(original);o.material.envMapIntensity=.45;}});
     const mat=(name)=>[...materials.values()].find(m=>m.name===name);
-    // Textured neutral skin is tinted subtly; keep its authored pores and lips.
-    if(look.skin){const skin=mat('Skin'),tint=new T.Color(look.skin),brightness=Math.max(tint.r,tint.g,tint.b);const source=skinMaterials[brightness<.34?2:brightness<.67?1:0];if(source&&skin)skin.map=source.map;tint.lerp(new T.Color('#ffffff'),.72);skin?.color.copy(tint);}
+    // Calibrate each authored complexion map instead of mixing the chosen
+    // colour mostly back to white. Texture detail and lips stay intact.
+    if(look.skin){
+      const skin=mat('Skin'),chosen=new T.Color(look.skin),brightness=Math.max(chosen.r,chosen.g,chosen.b);
+      const index=brightness<.56?2:brightness<.82?1:0,source=skinMaterials[index];
+      const reference=new T.Color(['#e8c3ad','#c59370','#805237'][index]).convertSRGBToLinear();
+      chosen.convertSRGBToLinear();
+      if(skin){if(source)skin.map=source.map;skin.color.setRGB(chosen.r/reference.r,chosen.g/reference.g,chosen.b/reference.b);}
+    }
     if(look.shirt)mat('Outfit')?.color.copy(new T.Color(look.shirt).lerp(new T.Color('#ffffff'),.48));
     const style=look.detailedHair ?? (['bob','long','braids'].includes(look.hairStyle)?1:['pony','ponytail','bun'].includes(look.hairStyle)?2:0);
     mat('Brows')?.color.set(look.hair||'#3a2618');
@@ -104,13 +113,13 @@
     const feet=['L','R'].map(side=>named(model,'foot.'+side)),footPoint=new T.Vector3();
     let mode='stand';
     const rig={root,s,cup,phone,seatH:.5,speed:0,talking:0,look:null,
-      dispose(){root.traverse(o=>{o.geometry?.dispose();o.skeleton?.dispose();});for(const material of materials.values())material.dispose();},
+      dispose(){root.traverse(o=>{if(o.geometry&&!sharedGeometry.has(o.geometry))o.geometry.dispose();o.skeleton?.dispose();});for(const material of materials.values())material.dispose();},
       setMode(next){mode=next;driver.setMode(next);},
       update(dt,yaw){
         root.updateMatrixWorld(true);
         driver.seatH=this.seatH/s;driver.speed=this.speed;driver.talking=this.talking;
         driver.look=this.look?root.worldToLocal(lookPoint.set(this.look.x,this.look.y??1.6,this.look.z)):null;
-        driver.update(dt,0);temporary.updateMatrixWorld(true);
+        driver.update(dt,0);this.talking=driver.talking;temporary.updateMatrixWorld(true);
         hips.position.y=restHip+(driver.J.hips.position.y-.95);
         hips.position.z=restZ+driver.J.hips.position.z;
         model.updateMatrixWorld(true);

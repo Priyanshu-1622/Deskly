@@ -10,7 +10,7 @@
       if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else if (k === 'class') el.className = v;
       else if (k === 'style') el.style.cssText = v;
-      else if (k === 'html') el.innerHTML = v;
+      else if (k === 'markdown') el.innerHTML = md(v);
       else el.setAttribute(k, v === true ? '' : v);
     }
     for (const c of kids.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
@@ -36,7 +36,7 @@
   }
   const fname = n => String(n).split(' ').find(w => !/^Dr\.?$/.test(w)) || n;
   const initials = n => n.replace(/^Dr\.\s*/, '').split(/\s+/).map(w => w[0]).slice(0, 2).join('');
-  const STATUS_LABEL = { created: 'Queued', queued: 'Queued', planning: 'Planning', running: 'Working', waiting_for_approval: 'Needs approval', reviewing: 'Self-review', interrupted: 'Interrupted', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped' };
+  const STATUS_LABEL = { created: 'Queued', queued: 'Queued', planning: 'Planning', running: 'Running', waiting_for_approval: 'Needs you', reviewing: 'Self-review', interrupted: 'Interrupted', completed: 'Done', failed: 'Failed', cancelled: 'Stopped' };
   const STATUS_COL = { created: '#9b7be0', queued: '#9b7be0', planning: '#9b7be0', running: '#3b8ff0', waiting_for_approval: '#f0a020', reviewing: '#3b8ff0', interrupted: '#f0a020', completed: '#2fbf71', failed: '#e0504a', cancelled: '#9aa3ad' };
 
   class UI {
@@ -64,8 +64,8 @@
       if (key === this._ck) return; this._ck = key;
       const c = $('#counters'); c.replaceChildren(
         h('button', { type: 'button', onclick: () => this.openBoard('tasks'), title: 'Tasks in progress' }, h('i', { style: 'background:#3b8ff0' }), `${working}`, h('span', {}, ' working')),
-        h('button', { type: 'button', class: appr ? 'warn' : '', onclick: () => this.openBoard('approvals'), title: 'Approvals waiting' }, h('i', { style: 'background:#f0a020' }), `${appr}`, h('span', {}, ' to approve')),
-        h('button', { type: 'button', onclick: () => this.openBoard('tasks'), title: 'Results ready for review' }, h('i', { style: 'background:#2fbf71' }), `${done}`, h('span', {}, ' ready'))
+        h('button', { type: 'button', class: appr ? 'warn' : '', onclick: () => this.openBoard('approvals'), title: 'Approvals waiting' }, h('i', { style: 'background:#f0a020' }), `${appr}`, h('span', {}, ' needs you')),
+        h('button', { type: 'button', onclick: () => this.openBoard('tasks'), title: 'Results ready for review' }, h('i', { style: 'background:#2fbf71' }), `${done}`, h('span', {}, ' done'))
       );
     }
     clock(info, preview = false) {
@@ -187,7 +187,7 @@
     /* ---------------- panels ---------------- */
     open(kind, header, body, onRender) {
       const p = $('#panel');
-      this.panelKind = kind; this.app.player.releaseLock();
+      this.panelKind = kind; p.dataset.kind = kind; this.app.player.releaseLock();
       p.replaceChildren(header, ...[].concat(body));
       p.hidden = false;
       this.onRender = onRender || null;
@@ -241,7 +241,7 @@
       const provLabel = e.provider && e.provider !== 'demo' ? `${e.provider}${e.model ? ' · ' + e.model : ''}` : 'demo mode';
       const chip = h('span', { class: 'chip' });
       const activity = h('p', {});
-      const header = this.hdr(e.name, `${e.role} · ${e.dept} · ${provLabel}`, h('div', { class: 'avatar', style: `background:${e.color}` }, initials(e.name)));
+      const header = this.hdr(e.name, `${e.role} · ${e.dept} · ${provLabel}`, h('div', { class: 'avatar', style: `background:${DesklyScreens.departmentColor(e.dept)}` }, initials(e.name)));
       header.querySelector('.who').append(h('div', { style: 'margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, chip), activity);
       const taskBox = h('div', { class: 'sect' });
       const chatBox = h('div', { class: 'chat' });
@@ -283,20 +283,25 @@
       const feedback = h('div', { class: 'row' },
         h('button', { class: 'btn', type: 'button', onclick: () => app.life?.feedback(e, 'positive') }, 'Praise this work'),
         h('button', { class: 'btn', type: 'button', onclick: () => app.life?.feedback(e, 'revise') }, 'Needs a better pass'));
-      const body = h('div', { class: 'body' }, e.provider === 'demo' || !e.provider ? h('div', { class: 'card amber' }, h('div', { class: 'note', style: 'color:#f3d9a6' }, `${fname(e.name)} is in demo mode, so work is simulated. Give them a provider and API key in Settings → Team.`)) : '', resumeCard, taskBox,
-        h('div', { class: 'sect' }, h('h3', {}, 'Give work'), ta, h('div', { class: 'row' }, assignBtn, askBtn), chatBox, h('h3', { style: 'margin-top:4px' }, 'Ideas for ' + e.role.toLowerCase()), ideas),
-        h('div', { class: 'sect' }, h('h3', {}, 'Ask in person'), orders),
-        h('div', { class: 'sect' }, h('h3', {}, 'Feedback'), feedback),
-        h('p', { class: 'note' }, `Scope: ${e.scope}. ${fname(e.name)} works inside your project folder. Commands and anything that leaves the company always stop for your approval.`));
+      const tabBar = h('div', { class: 'tabs', role: 'tablist' });
+      const taskPage = h('div', { class: 'employee-page' }, taskBox, h('div', { class: 'sect' }, h('h3', {}, 'Work ideas'), ideas), h('div', { class: 'sect' }, h('h3', {}, 'Feedback'), feedback));
+      const talkPage = h('div', { class: 'employee-page' }, chatBox, h('div', { class: 'sect' }, h('h3', {}, 'Ask in person'), orders));
+      const resumePage = h('div', { class: 'employee-page' }, resumeCard, h('p', { class: 'note' }, `Scope: ${e.scope}. ${fname(e.name)} works inside your project folder. Commands and external actions stop for your approval.`), h('button', { class: 'btn', type: 'button', onclick: () => { this.close(); app.pause(); app.screens.openSettings('memory'); } }, 'Review memory in Settings'));
+      const pages = [taskPage, talkPage, resumePage];
+      const selectTab = index => { pages.forEach((page, i) => page.hidden = i !== index); [...tabBar.children].forEach((button, i) => { button.setAttribute('aria-selected', String(i === index)); button.tabIndex = i === index ? 0 : -1; }); };
+      ['Task', 'Talk', 'Résumé & memory'].forEach((label, index) => tabBar.append(h('button', { type: 'button', role: 'tab', 'aria-selected': String(index === 0), onclick: () => selectTab(index), onkeydown: event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const next = (index + (event.key === 'ArrowRight' ? 1 : 2)) % 3; selectTab(next); tabBar.children[next].focus(); } }, label)));
+      selectTab(0);
+      const body = h('div', { class: 'body employee-body' }, e.provider === 'demo' || !e.provider ? h('div', { class: 'card amber' }, h('p', { class: 'note' }, 'Demo mode · work is simulated. Configure a provider in Settings → Team & AI keys.')) : null, ...pages);
+      const composer = h('div', { class: 'employee-composer' }, h('h3', {}, 'New work order'), ta, h('div', { class: 'row' }, assignBtn, askBtn));
       let lastKey = '';
       const render = (force) => {
         const s = S(); chip.replaceChildren(h('i', { style: `background:${s.color}` }), s.label); activity.textContent = e.activity;
         const t = rt.activeFor(e.id) || rt.latestFor(e.id);
-        const key = t ? `${t.id}|${t.status}|${Math.round(t.progress * 50)}|${t.logs.length}|${t.reviewed}` : 'none';
+        const key = t ? `${t.id}|${t.status}|${Math.round(t.progress * 50)}|${t.logs.length}|${t.reviewed}|${rt.pendingApprovals().filter(approval => approval.taskId === t.id).map(approval => approval.id).join(',')}` : 'none';
         if (key === lastKey && !force) return; lastKey = key;
         taskBox.replaceChildren(...this.taskCard(t, e));
       };
-      this.open('employee', header, body, render); render(true);
+      this.open('employee', header, [tabBar, body, composer], render); render(true);
       setTimeout(() => { if (!this.app.player.touch) ta.focus({ preventScroll: true }); }, 50);
     }
 
@@ -309,10 +314,10 @@
         h('div', { style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' }, h('div', { class: 't' }, t.title), h('span', { class: 'chip' }, h('i', { style: `background:${col}` }), STATUS_LABEL[t.status])),
         h('div', { class: 'bar' }, h('b', { style: `width:${Math.round(t.progress * 100)}%;background:${col}` })));
       if (t.projectMap && t.workArea) card.append(h('p', { class: 'note' }, `Project area: ${t.projectMap.areas[t.workArea]}/ · ${t.workArea}`));
-      if (t.steps && t.steps.length) card.append(h('ol', { class: 'steps' }, ...t.steps.map((s, i) => h('li', { class: i < t.step || t.status === 'completed' ? 'done' : i === t.step ? 'now' : '' }, h('span', {}, i < t.step || t.status === 'completed' ? '✓' : i === t.step ? '▸' : '·'), s.label + (s.sensitive ? ' · needs approval' : '')))));
+      if (t.steps && t.steps.length) card.append(h('ol', { class: 'steps' }, ...t.steps.map((s, i) => h('li', { class: i < t.step || t.status === 'completed' ? 'done' : i === t.step ? 'now' : '' }, h('span', {}, i < t.step || t.status === 'completed' ? '✓' : i === t.step ? '▸' : '·'), s.label))));
       if (t.status === 'waiting_for_approval') {
         const a = rt.pendingApprovals().find(x => x.taskId === t.id);
-        if (a) card.append(h('div', { class: 'card amber' },
+        if (a) card.append(h('div', { class: 'slip approval-slip' },
           h('div', { class: 't' }, 'Approval needed'),
           h('div', { style: 'font-size:13px;line-height:1.45' }, h('b', {}, a.action.kind.replace(/_/g, ' ')), ' · ', a.action.summary),
           a.action.content ? h('pre', { class: 'log' }, a.action.content) : null,
@@ -334,7 +339,7 @@
     }
     resultCard(t, e) {
       const r = t.result;
-      const body = h('div', { class: 'md', html: md(r.body) });
+      const body = h('div', { class: 'md', markdown: r.body });
       const copyBtn = h('button', { class: 'btn', type: 'button' }, 'Copy report');
       copyBtn.onclick = async () => { try { await navigator.clipboard.writeText(r.body); copyBtn.textContent = 'Copied'; } catch (err) { copyBtn.textContent = 'Copy failed'; } };
       const doneBtn = h('button', { class: 'btn primary', type: 'button' }, t.reviewed ? 'Reviewed ✓' : 'Mark reviewed');
@@ -352,13 +357,16 @@
       const app = this.app, rt = app.runtime;
       const tabs = ['tasks', 'approvals', 'team', 'audit'];
       const names = { tasks: 'Tasks', approvals: 'Approvals', team: 'Team', audit: 'Audit log' };
+      const overview = h('aside', { class: 'operations-overview' });
       const bar = h('div', { class: 'tabs', role: 'tablist' });
       const body = h('div', { class: 'body' });
       let cur = tab, lastKey = '';
       const renderTabs = () => bar.replaceChildren(...tabs.map(t => h('button', { type: 'button', role: 'tab', 'aria-selected': String(t === cur), onclick: () => { cur = t; lastKey = ''; renderTabs(); render(); } }, names[t] + (t === 'approvals' && rt.pendingApprovals().length ? ` (${rt.pendingApprovals().length})` : ''))));
       const render = () => {
-        const key = cur + rt.list().map(t => t.status + (t.progress * 20 | 0)).join() + rt.pendingApprovals().length + app.office.employees.map(e => `${e.state}:${e.present}:${e.activity}`).join() + app.office.shift.overtime.join() + app.office.shift.recalled.join() + app.office.shift.sentHome.join() + (cur === 'audit' ? app.audit.entries.length : '');
+        const key = cur + Math.floor(performance.now() / 5000) + rt.list().map(t => t.status + (t.progress * 20 | 0)).join() + rt.pendingApprovals().length + app.office.employees.map(e => `${e.state}:${e.present}:${e.activity}`).join() + app.office.shift.overtime.join() + app.office.shift.recalled.join() + app.office.shift.sentHome.join() + (cur === 'audit' ? app.audit.entries.length : '');
         if (key === lastKey) return; lastKey = key; renderTabs();
+        overview.replaceChildren(h('h2', {}, cur === 'approvals' ? 'Needs your say.' : 'Your company, at work.'), h('div', { class: 'operations-counts' }, h('div', {}, h('b', {}, String(rt.pendingApprovals().length).padStart(2, '0')), h('span', { class: 'label' }, 'Waiting')), h('div', {}, h('b', {}, String(rt.list().filter(task => ['created', 'queued', 'planning', 'running', 'reviewing'].includes(task.status)).length).padStart(2, '0')), h('span', { class: 'label' }, 'Running'))), h('p', { class: 'note' }, 'Review exact changes here. Commands can access your computer; approving them does not create a sandbox.'), h('p', { class: 'note' }, 'Protected configuration always asks before writing.'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { this.close(); app.pause(); app.screens.openSettings('memory'); } }, 'Memory & usage settings'));
+        DK.tasksSnapshot().then(snapshot => { const errors = [...(snapshot.notices || []), snapshot.lastSaveError, snapshot.lastAuditError].filter(Boolean); if (!body.isConnected || !errors.length) return; const notice = h('div', { class: 'card amber' }, h('h3', {}, 'Local data needs attention'), ...errors.map(message => h('p', {}, message))); body.prepend(notice); }).catch(() => {});
         if (cur === 'tasks') {
           const ts = rt.list();
           const handoffs = h('div', { class: 'list' }, h('p', { class: 'note' }, 'Loading project handoffs…'));
@@ -384,7 +392,7 @@
           const ap = rt.pendingApprovals();
           body.replaceChildren(ap.length ? h('div', { class: 'list' }, ...ap.map(a => {
             const e = app.office.byId(a.employeeId), t = rt.get(a.taskId);
-            return h('div', { class: 'card amber' }, h('div', { class: 't' }, `${e.name} · ${t.title}`), h('div', { style: 'font-size:13px' }, h('b', {}, a.action.kind.replace(/_/g, ' ')), ' · ', a.action.summary), h('div', { class: 'note' }, `Risk: ${a.action.risk}`),
+            return h('div', { class: 'slip approval-slip' }, h('div', { class: 't' }, `${e.name} · ${t.title}`), h('div', { style: 'font-size:13px' }, h('b', {}, a.action.kind.replace(/_/g, ' ')), ' · ', a.action.summary), h('div', { class: 'note' }, `Risk: ${a.action.risk}`), a.action.content ? h('pre', { class: 'log' }, a.action.content) : null,
               h('div', { class: 'row' }, h('button', { class: 'btn warn', type: 'button', onclick: () => rt.respondApproval(a.id, 'approved') }, 'Approve'), h('button', { class: 'btn danger', type: 'button', onclick: () => rt.respondApproval(a.id, 'rejected') }, 'Reject'), h('button', { class: 'btn', type: 'button', onclick: () => this.openEmployee(e) }, 'Open')));
           })) : h('p', { class: 'note' }, 'Nothing is waiting for you.'));
         } else if (cur === 'team') {
@@ -414,7 +422,7 @@
         }
       };
       this.panelEmp && (this.panelEmp.interacting = false); this.panelEmp = null;
-      this.open('board', this.hdr('Operations board', 'Everything your team is doing, in one place'), [bar, body], render);
+      this.open('board', this.hdr('Operations board', 'Everything your team is doing, in one place'), [overview, bar, body], render);
       render();
     }
 
@@ -463,7 +471,7 @@
       const recent = this.app.runtime.list().filter(t => t.status === 'completed');
       const now = h('div', { class: 'card' }, h('div', { class: 't' }, 'Office overview'), h('p', { class: 'note' }, `${employees.length} people present · ${this.app.runtime.list().filter(t => DesklyRuntime.ACTIVE.has(t.status)).length} active tasks · ${this.app.runtime.pendingApprovals().length} approvals waiting`));
       const reports = h('div', { class: 'ideas' }, ...recent.slice(0, 10).map(t => h('button', { type: 'button', onclick: () => {
-        const e = this.app.office.byId(t.employeeId); now.replaceChildren(h('div', { class: 't' }, t.title), h('p', { class: 'note' }, `${e?.name || t.employeeId} · completed`), h('div', { class: 'md', html: md(String(t.result?.body || 'Result ready.').slice(0, 1200)) }));
+        const e = this.app.office.byId(t.employeeId); now.replaceChildren(h('div', { class: 't' }, t.title), h('p', { class: 'note' }, `${e?.name || t.employeeId} · completed`), h('div', { class: 'md', markdown: String(t.result?.body || 'Result ready.').slice(0, 1200) }));
       } }, `Present · ${t.title}`)));
       this.open('display', this.hdr(`${marker.room?.replace(/_/g, ' ') || 'Office'} display`, 'Presentation and room controls'), h('div', { class: 'body' }, now,
         h('div', { class: 'sect' }, h('h3', {}, 'Present completed work'), recent.length ? reports : h('p', { class: 'note' }, 'Completed work will be available for presentation here.')),
@@ -474,7 +482,7 @@
       const meetings = life.state.meetings.slice(0, 8);
       const reports = this.app.runtime.list().filter(t => t.status === 'completed').slice(0, 10);
       const preview = h('div', { class: 'card' }, h('div', { class: 't' }, 'Select an item'), h('p', { class: 'note' }, 'Your office notes, meeting records, and completed work are kept here.'));
-      const show = (title, body) => preview.replaceChildren(h('div', { class: 't' }, title), h('div', { class: 'md', html: md(body) }));
+      const show = (title, body) => preview.replaceChildren(h('div', { class: 't' }, title), h('div', { class: 'md', markdown: body }));
       const item = (title, body) => h('button', { class: 'item', type: 'button', onclick: () => show(title, body) }, h('div', { class: 'meta' }, h('b', {}, title)));
       this.open('archive', this.hdr('CEO office archive', 'Your decisions and finished work'), h('div', { class: 'body' },
         preview,
@@ -508,15 +516,76 @@
         const list = present.filter(e => chosen.has(e.id));
         if (!list.length) { this.toast('Pick at least one person.', '#f0a020'); return; }
         of.callMeeting(sel, list, topic.value.trim());
-        this.toast(`${list.length} ${list.length === 1 ? 'person is' : 'people are'} on the way to ${sel === 'CEO_Office' ? 'your office' : sel.replace('_', ' ')}.`, '#f2c230');
+        this.toast(`${list.length} ${list.length === 1 ? 'person is' : 'people are'} on the way to ${sel === 'CEO_Office' ? 'your office' : sel.replace('_', ' ')}. Press C or M to open your shared discussion.`, '#f2c230');
         this.close();
       } }, 'Call them');
       this.open('meeting', this.hdr('Call people', 'Pick who should come and where. Their tasks keep running while they are with you.'),
         h('div', { class: 'body' }, h('div', { class: 'sect' }, h('h3', {}, 'Where'), roomsEl), h('div', { class: 'sect' }, h('h3', {}, 'Who'), quick, people, h('p', { class: 'note' }, 'Seats fill first; anyone extra stands around the room.')), h('div', { class: 'sect' }, h('h3', {}, 'Topic'), topic), h('div', { class: 'row' }, go)));
     }
+    groupConversation(m) {
+      const root=h('section',{class:'group-discussion sect'}),status=h('p',{class:'note'},'Loading shared conversation…');
+      const history=h('select',{'aria-label':'Saved group conversations',onchange:async()=>{try{const state=await DK.groupGet(history.value);m.groupSessionId=state.id;apply(state);}catch(error){this.toast(DesklyRuntime.errorCopy(error),'#e0504a');}}});
+      const transcript=h('div',{class:'group-transcript',role:'log','aria-label':'Shared group conversation','aria-live':'polite'});
+      const selected=new Set(m.people.slice(0,3).map(e=>e.id));
+      const people=h('div',{class:'group-participants'},...m.people.map(e=>h('label',{class:'group-person'},h('input',{type:'checkbox',checked:selected.has(e.id),onchange:event=>{event.target.checked?selected.add(e.id):selected.delete(e.id);controls();}}),h('span',{},h('b',{},e.name),h('small',{},e.role)))));
+      const message=h('textarea',{id:'groupMessage',rows:3,maxlength:5000,placeholder:'Send a message to everyone here, or ask them to discuss an idea…',oninput:()=>controls()});
+      const cost=h('p',{class:'note'});
+      let state=null,pending=false,refreshing=false,lastRefresh=0,renderKey=null;
+      const send=async discuss=>{
+        if(!state||pending)return;
+        pending=true;controls();const text=message.value.trim();
+        try{const result=await DK.groupSend(state.id,text,discuss?[...selected]:[]);if(message.value.trim()===text)message.value='';apply(result);}
+        catch(error){this.toast(DesklyRuntime.errorCopy(error),'#e0504a');}
+        finally{pending=false;controls();refresh(true);}
+      };
+      const post=h('button',{class:'btn',type:'button',onclick:()=>send(false)},'Post to everyone');
+      const discuss=h('button',{class:'btn primary',type:'button',onclick:()=>send(true)},'Discuss with selected');
+      const stop=h('button',{class:'btn danger',type:'button',onclick:async()=>{try{apply(await DK.groupCancel(state.id));status.textContent='Stopping the current reply…';}catch(error){this.toast(error.message,'#e0504a');}}},'Stop discussion');
+      const decision=h('input',{type:'text',maxlength:700,placeholder:'A confirmed decision to remember across sessions…'});
+      const save=h('button',{class:'btn',type:'button',onclick:async()=>{if(!decision.value.trim()||!state||pending)return;const text=decision.value.trim();pending=true;controls();try{apply(await DK.groupDecision(state.id,text));m.actions||=[];m.actions.push(text);if(decision.value.trim()===text)decision.value='';this.toast('Decision saved to the participants’ project memories.');}catch(error){this.toast(DesklyRuntime.errorCopy(error),'#e0504a');}finally{pending=false;controls();}}},'Save shared decision');
+      const controls=()=>{
+        const busy=pending||state?.status==='running',ended=state?.status==='ended';
+        post.disabled=!state||busy||ended||!message.value.trim();
+        discuss.disabled=!state||busy||ended||!selected.size||(!message.value.trim()&&!state.messages.some(m=>m.kind==='founder'));
+        stop.disabled=state?.status!=='running';save.disabled=!state||busy||ended;history.disabled=pending||state?.status==='running';
+        people.querySelectorAll('input').forEach(input=>{input.disabled=busy||ended;});
+        cost.textContent=`Post: no AI calls. Discuss: one reply per selected employee (${selected.size} calls), in order. Leave the message empty to discuss the latest founder message.`;
+      };
+      const apply=snapshot=>{
+        if(state?.id===snapshot.id&&(Date.parse(snapshot.updatedAt)<Date.parse(state.updatedAt)||(state.status==='ended'&&snapshot.status!=='ended')))return;
+        state=snapshot;m.groupSnapshot=snapshot;
+        status.textContent=snapshot.status==='ended'?'Saved conversation · read only':snapshot.status==='running'?`${snapshot.participants.find(p=>p.id===snapshot.speakerId)?.name||'Team'} is preparing a reply. You can stop the round.`:'Everyone here shares this conversation. Only selected employees reply.';
+        m.groupImported||=new Set();
+        for(const line of snapshot.messages){if(m.groupImported.has(line.id))continue;m.groupImported.add(line.id);m.lines.push({e:{id:line.employeeId||'founder',name:line.name},l:line.kind==='error'?'Provider error: '+line.text:line.text});if(line.kind==='employee'&&snapshot.status==='running'&&this.app.office.meeting===m){const e=m.people.find(e=>e.id===line.employeeId);if(e){m.speaking=e;e.say(line.text,4);}}}
+        if(m.speaking?.rig.talking<=0&&snapshot.status!=='running')m.speaking=null;
+        const key=snapshot.messages.map(line=>line.id).join(',');
+        if(key!==renderKey){renderKey=key;const nearBottom=transcript.scrollHeight-transcript.scrollTop-transcript.clientHeight<80;transcript.replaceChildren(...snapshot.messages.map(line=>h('article',{class:'group-message '+line.kind},h('div',{class:'group-message-heading'},h('b',{},line.kind==='decision'?'Confirmed decision · '+line.name:line.name),h('small',{},new Date(line.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))),h('div',{class:'md',markdown:line.kind==='error'?'Provider error: '+line.text:line.text}))));if(!snapshot.messages.length)transcript.append(h('p',{class:'note'},'Start with a message. Everyone can read it; select who should reply.'));if(nearBottom)transcript.scrollTop=transcript.scrollHeight;}
+        controls();
+      };
+      const refresh=async force=>{
+        if(!m.groupSessionId||refreshing||(!force&&Date.now()-lastRefresh<1000))return;
+        refreshing=true;lastRefresh=Date.now();
+        const id=m.groupSessionId;
+        try{const snapshot=await DK.groupGet(id);if(m.groupSessionId===id)apply(snapshot);}catch(error){status.textContent=DesklyRuntime.errorCopy(error);}finally{refreshing=false;}
+      };
+      root.append(h('h3',{},'Shared group conversation'),history,status,people,transcript,message,h('div',{class:'row'},post,discuss,stop),cost,h('div',{class:'group-decision'},decision,save));
+      controls();
+      (async()=>{
+        try{
+          if(!m.groupSessionId){m.groupPromise||=DK.groupStart(m.room,m.topic||'Group conversation',m.people.map(e=>e.id));m.groupSessionId=(await m.groupPromise).id;}
+          apply(await DK.groupGet(m.groupSessionId));
+          const ids=m.people.map(e=>e.id).sort().join('|');
+          const sessions=(await DK.groupList()).filter(s=>s.room===m.room&&s.participants.map(p=>p.id).sort().join('|')===ids);
+          history.replaceChildren(...sessions.map(s=>h('option',{value:s.id,selected:s.id===m.groupSessionId},`${s.topic} · ${new Date(s.updatedAt).toLocaleString()}${s.status==='ended'?' · saved':''}`)));
+        }catch(error){status.textContent=DesklyRuntime.errorCopy(error);m.groupPromise=null;}
+      })();
+      return{root,refresh,apply,get busy(){return pending||state?.status==='running';}};
+    }
+
     meetingLive() {
       const app = this.app, of = app.office, m = of.meeting;
       m.actions ||= [];
+      const group=this.groupConversation(m);
       const status = h('p', { class: 'note' });
       const transcript = h('div', { class: 'chat' });
       const lines = m.lines;
@@ -524,12 +593,14 @@
       const renderT = () => transcript.replaceChildren(...lines.slice(-12).map(x => h('div', { class: 'them' }, h('b', {}, fname(x.e.name) + ': '), x.l)));
       renderT();
       const topic = h('input', { type: 'text', id: 'meetTopic2', value: m.topic || '', placeholder: 'What should the team think about?' });
-      const b1 = h('button', { class: 'btn', type: 'button', onclick: async () => { b1.disabled = b2.disabled = true; await of.runStandup(addLine); b1.disabled = b2.disabled = false; } }, 'Go around: status updates');
+      let toolsBusy=false;
+      const b1 = h('button', { class: 'btn', type: 'button', onclick: async () => { if(group.busy||toolsBusy)return;toolsBusy=true;b1.disabled = b2.disabled = true;try{await of.runStandup(addLine);}finally{toolsBusy=false;b1.disabled=b2.disabled=group.busy;} } }, 'Go around: status updates');
       const b2 = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
-        const tp = topic.value.trim(); if (!tp) { topic.focus(); return; }
+        if(group.busy||toolsBusy)return;const tp = topic.value.trim(); if (!tp) { topic.focus(); return; }
+        toolsBusy=true;
         b1.disabled = b2.disabled = true;
         try { await of.runBrainstorm(tp, { meeting: (t, p) => DK.meetingIdeas(t, p) }, addLine); } catch (err) { this.toast(DesklyRuntime.errorCopy(err), '#e0504a'); }
-        b1.disabled = b2.disabled = false;
+        toolsBusy=false;b1.disabled = b2.disabled = group.busy;
       } }, 'Brainstorm this topic');
       let selected = m.people[0] || null;
       const speakerButtons = h('div', { class: 'ideas' });
@@ -545,13 +616,17 @@
       renderActions();
       const askSpeaker = h('button', { class: 'btn', type: 'button', onclick: () => { if (!selected) return; const line = app.life?.statusLine(selected) || selected.activity; m.speaking = selected; selected.say(line, 6); addLine(selected, line); } }, 'Ask for update');
       const present = h('button', { class: 'btn', type: 'button', onclick: () => { if (!selected) return; app.life?.present(selected, m); renderT(); } }, 'Present latest work');
-      const end = h('button', { class: 'btn danger', type: 'button', onclick: () => {
+      const end = h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+        end.disabled=true;
+        try{if(m.groupPromise&&!m.groupSessionId)m.groupSessionId=(await m.groupPromise).id;if(m.groupSessionId)group.apply(await DK.groupEnd(m.groupSessionId));}
+        catch(error){end.disabled=false;this.toast(DesklyRuntime.errorCopy(error),'#e0504a');return;}
         const summary = app.life?.finishMeeting(m); of.endMeeting();
         this.toast(summary ? 'Meeting ended. Notes and action items were pinned to the room whiteboard.' : 'Everyone is heading back to their desks.', '#f2c230'); this.close();
       } }, 'End and save meeting');
-      const render = () => { const a = of.meetingArrived(); status.textContent = `${a} of ${m.people.length} arrived in ${m.room.replace('_', ' ')}. ${a < m.people.length ? 'People are still walking over.' : 'Everyone is here.'}`; };
+      let renderedLines=lines.length,renderedActions=m.actions.length;
+      const render = () => { group.refresh();b1.disabled=b2.disabled=toolsBusy||group.busy;if(lines.length!==renderedLines){renderedLines=lines.length;renderT();}if(m.actions.length!==renderedActions){renderedActions=m.actions.length;renderActions();}const a = of.meetingArrived(); status.textContent = `${a} of ${m.people.length} arrived in ${m.room.replace('_', ' ')}. ${a < m.people.length ? 'People are still walking over.' : 'Everyone is here.'}`; };
       this.open('meetingLive', this.hdr(m.room === 'CEO_Office' ? 'In your office' : 'Meeting in progress', m.room === 'CEO_Office' ? `${m.people.length} people called in` : m.room.replace('_', ' ')), h('div', { class: 'body' }, status,
-        h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2)),
+        group.root,h('details',{class:'meeting-tools'},h('summary',{},'Status updates & quick brainstorm'),h('div', { class: 'sect' }, h('h3', {}, 'Run the meeting'), h('div', { class: 'row' }, b1), topic, h('div', { class: 'row' }, b2))),
         h('div', { class: 'sect' }, h('h3', {}, 'Choose a speaker'), speakerButtons, h('div', { class: 'row' }, askSpeaker, present)),
         h('div', { class: 'sect' }, h('h3', {}, 'Decisions and actions'), actionInput, h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: () => { const value = actionInput.value.trim(); if (!value) return; m.actions.push(value); actionInput.value = ''; renderActions(); } }, 'Add action item')), actionList),
         h('div', { class: 'sect' }, h('h3', {}, 'Transcript'), transcript), h('div', { class: 'row' }, end)), render);

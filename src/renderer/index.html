@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob:; font-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob:; font-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Deskly</title>
 <link rel="icon" type="image/png" href="assets/deskly-icon.png">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/office-tools.css">
+<link rel="stylesheet" href="css/front-desk.css">
 </head>
 <body>
 <div id="stage"></div>
@@ -36,7 +37,7 @@
 <div id="screen-pause" class="screen" hidden></div>
 <div id="screen-laptop" class="screen" hidden></div>
 
-<div id="boot"><div class="b"><div class="brand"><img class="logo" src="assets/deskly-icon.png" alt=""><div><h1>Deskly</h1></div></div><div class="track"><div id="bootBar"></div></div><p id="bootMsg">Starting…</p></div></div>
+<div id="boot"><div class="boot-heading"><img class="logo" src="assets/deskly-icon.png" alt=""><span class="disp">Deskly</span><span class="tape dark">Opening the building</span></div><div class="b"><div class="boot-progress"><span id="bootPercent">00</span><small>%</small></div><div class="boot-copy"><span class="tape">Opening the office</span><h1 class="disp">Your office.<br>Your company.</h1><p id="bootMsg" role="status">Starting…</p><p class="boot-tip">Your project, your team, your decisions.</p></div></div><div class="boot-bottom"><div class="track"><div id="bootBar"></div></div><p>Press <kbd>L</kbd> at your desk to open your laptop. <kbd>G</kbd> opens the office map.</p></div></div>
 
 <script src="vendor/three.min.js"></script>
 <script src="vendor/GLTFLoader.js"></script>

@@ -3,10 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { cleanEnvironment, stopTree } = require('./process-control');
 
 const DENY = [/\brm\s+-rf\s+[\/~]/i, /\bformat\s+[a-z]:/i, /\bmkfs\b/i, /\bshutdown\b/i, /\breboot\b/i, /:\(\)\s*\{/, /\bdel\s+\/s\b/i, /\bRemove-Item\b.*-Recurse.*[A-Z]:\\\s*$/i];
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.venv']);
-const SECRET = /(^|[\\/])(\.env(?:\..*)?|\.npmrc|\.pypirc|id_rsa|id_ed25519)(?=[\\/]|$)/i;
+const SECRET = /(^|[\\/])(\.env[^\\/]*|\.npmrc|\.pypirc|\.netrc|\.git-credentials|\.aws|\.ssh|\.kube[\\/]config|\.docker[\\/]config\.json|\.git[\\/]config|id_[^\\/]*|[^\\/]*\.(?:pem|key|p12|pfx)|[^\\/]*service[-_]account[^\\/]*\.json)(?=[\\/]|$)/i;
+const RISKY = /(^|\/)(\.git|\.github|\.vscode|\.husky)(\/|$)|(^|\/)(package\.json|.*lock.*|Makefile|Dockerfile.*|(?:docker-)?compose\.[^/]+|\.gitlab-ci\.yml|Jenkinsfile)$/i;
 
 class Workspace {
   constructor(root) {
@@ -14,11 +16,14 @@ class Workspace {
   }
   ensure() {
     if (!this.root) throw new Error('No project folder is set. Choose one in Settings → General.');
-    if (!fs.existsSync(this.root)) fs.mkdirSync(this.root, { recursive: true });
+    if (!fs.existsSync(this.root) || !fs.statSync(this.root).isDirectory()) throw new Error('The project folder is unavailable. Reconnect its drive or choose an existing folder in Settings.');
   }
   resolve(p = '.') {
     this.ensure();
-    const full = path.resolve(this.root, String(p || '.'));
+    if (typeof p !== 'string' || p.length > 2048 || /[\x00-\x1f]/.test(p)) throw new Error('Invalid file path.');
+    // Reject Windows path aliases on every platform, including ADS and 8.3 names.
+    if (p.replace(/\\/g, '/').split('/').some(n => n !== '.' && n !== '..' && (/[. ]$/.test(n) || /:|~\d/.test(n)))) throw new Error('Refused: ambiguous file path alias.');
+    const full = path.resolve(this.root, p || '.');
     const rel = path.relative(this.root, full);
     if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Refused: ${p} is outside the project folder.`);
     // Refuse links at every existing component, including dangling links. This
@@ -42,7 +47,7 @@ class Workspace {
       try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
       ents.sort((a, b) => (b.isDirectory() - a.isDirectory()) || a.name.localeCompare(b.name));
       for (const e of ents) {
-        if (SKIP.has(e.name) || SECRET.test(path.join(dir, e.name)) || e.isSymbolicLink()) continue;
+        if (SKIP.has(e.name) || SECRET.test(path.join(dir, e.name)) || /[. ]$|:|~\d/.test(e.name) || e.isSymbolicLink()) continue;
         const full = path.join(dir, e.name);
         out.push({ path: this.rel(full), dir: e.isDirectory() });
         if (out.length > 400) return;
@@ -77,21 +82,25 @@ class Workspace {
     fs.writeFileSync(full, value, 'utf8');
     return { path: this.rel(full), bytes, created: !existed };
   }
-  runCommand(cmd, { timeoutMs = 120000, signal } = {}) {
+  runCommand(cmd, { timeoutMs = 120000, signal, founder = false } = {}) {
     this.ensure();
-    if (typeof cmd !== 'string' || !cmd.trim() || cmd.length > 300) return Promise.resolve({ code: -1, stdout: '', stderr: 'Refused: command must be 1–300 characters so it can be reviewed in full.' });
+    if (typeof cmd !== 'string' || !cmd.trim() || cmd.length > (founder ? 20000 : 300)) return Promise.resolve({ code: -1, stdout: '', stderr: 'Refused: command exceeds the review limit.' });
     if (DENY.some(r => r.test(cmd))) return Promise.resolve({ code: -1, stdout: '', stderr: 'Refused: this command is on the blocked list.' });
     return new Promise(resolve => {
-      const child = spawn(cmd, { cwd: this.root, shell: true, env: { ...process.env, CI: '1' } });
-      let out = '', err = '';
-      const cap = (s, d) => (s.length > 20000 ? s : s + d);
+      let child, out = '', err = '', done = false, t, stopping = false;
+      const finish = value => { if (done) return; done = true; clearTimeout(t); signal?.removeEventListener('abort', abort); resolve(value); };
+      const stop = async message => { if (done || stopping) return; stopping = true; await stopTree(child); finish({ code: -1, stdout: out, stderr: message }); };
+      const abort = () => { stop('[cancelled]'); };
+      if (signal?.aborted) { abort(); return; }
+      child = spawn(cmd, { cwd: this.root, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'], env: { ...cleanEnvironment(), CI: '1' } });
+      const cap = (s, d) => (s + d).slice(0, 20000);
       child.stdout.on('data', d => { out = cap(out, d.toString()); });
       child.stderr.on('data', d => { err = cap(err, d.toString()); });
-      const t = setTimeout(() => { child.kill(); err += '\n[timed out]'; }, timeoutMs);
-      signal?.addEventListener('abort', () => child.kill(), { once: true });
-      child.on('close', code => { clearTimeout(t); resolve({ code, stdout: out.slice(0, 20000), stderr: err.slice(0, 8000) }); });
-      child.on('error', e => { clearTimeout(t); resolve({ code: -1, stdout: out, stderr: String(e.message) }); });
+      t = setTimeout(() => { stop(err.slice(0, 7800) + '\n[timed out]'); }, timeoutMs);
+      signal?.addEventListener('abort', abort, { once: true });
+      child.on('close', code => { if (!stopping) finish({ code, stdout: out, stderr: err.slice(0, 8000) }); });
+      child.on('error', e => { if (!stopping) finish({ code: -1, stdout: out, stderr: String(e.message) }); });
     });
   }
 }
-module.exports = { Workspace };
+module.exports = { Workspace, SECRET, riskyWrite: p => RISKY.test(p), displayCommand: command => command.replace(/[^\x20-\x7e]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) };

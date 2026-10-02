@@ -1,20 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { readRecover, BufferedJSON } = require('./persistence');
 
 // Local, bounded context. Agents read this only when a person assigns work or
 // asks for a reply; posting an update never starts another model request.
 class TeamContext {
   constructor(dataDir) {
     this.file = path.join(dataDir, 'team-context.json');
-    if (fs.existsSync(this.file)) {
-      try { this.data = JSON.parse(fs.readFileSync(this.file, 'utf8')); }
-      catch {
-        try { this.data = JSON.parse(fs.readFileSync(this.file + '.bak', 'utf8')); }
-        catch { throw new Error('Team memory could not be read. Its files were preserved for recovery.'); }
-      }
-    } else this.data = { version: 1, sequence: 0, memories: [], updates: [], usage: {} };
+    this.notices = [];
+    this.data = readRecover(this.file, () => ({ version: 1, sequence: 0, memories: [], updates: [], usage: {} }), d => d && typeof d === 'object' && Array.isArray(d.memories) && Array.isArray(d.updates) && d.usage && typeof d.usage === 'object' && !Array.isArray(d.usage), this.notices);
     this.data.memories ||= []; this.data.updates ||= []; this.data.usage ||= {}; this.data.sequence ||= 0;
+    this.writer = new BufferedJSON(this.file, () => this.data, e => { this.lastSaveError = e.message; });
   }
   projectId(root) {
     if (!root) return null;
@@ -23,12 +20,9 @@ class TeamContext {
     return crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 16);
   }
   save() {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
-    if (fs.existsSync(this.file)) fs.copyFileSync(this.file, this.file + '.bak');
-    fs.renameSync(tmp, this.file);
+    this.writer.schedule();
   }
+  flush() { return this.writer.flush(); }
   addMemory({ employeeId, projectRoot, scope = 'project', text, source = 'employee', kind = 'fact', evidence = '' }) {
     const value = String(text || '').trim().slice(0, 700);
     if (!employeeId || !value) throw new Error('Memory needs an employee and a note.');
@@ -41,14 +35,19 @@ class TeamContext {
       kind: ['fact', 'decision', 'preference', 'lesson'].includes(kind) ? kind : 'fact',
       status: source === 'founder' ? 'verified' : 'unverified', evidence: String(evidence || '').slice(0, 300),
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const bucket = this.data.memories.filter(m => m.employeeId === employeeId && m.scope === scope && m.projectId === projectId);
+    if (bucket.length >= 200) {
+      const disposable = bucket.find(m => m.status === 'outdated') || bucket.find(m => m.status !== 'verified');
+      if (!disposable) throw new Error('This memory collection contains 200 verified notes. Archive a note before adding another; verified notes are never automatically discarded.');
+      this.data.memories = this.data.memories.filter(m => m.id !== disposable.id);
+    }
     this.data.memories.push(note);
-    this.data.memories = this.data.memories.slice(-500);
     this.save();
     return note;
   }
   memoriesFor(employeeId, projectRoot, limit = 12, query = '') {
     const projectId = this.projectId(projectRoot);
-    const matches = this.data.memories.filter(m => m.employeeId === employeeId && m.status !== 'outdated' && (m.scope === 'global' || (projectId && m.projectId === projectId)));
+    const matches = this.data.memories.filter(m => m.employeeId === employeeId && m.status === 'verified' && (m.scope === 'global' || (projectId && m.projectId === projectId)));
     const words = new Set(String(query).toLowerCase().match(/[a-z0-9]{4,}/g) || []);
     if (!words.size) return matches.slice(-Math.min(50, limit));
     return matches.map((m, index) => ({ m, index, score: [...words].filter(w => m.text.toLowerCase().includes(w)).length }))

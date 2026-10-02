@@ -6,8 +6,18 @@
   "main": "src/main/main.js",
   "license": "MIT",
   "author": "Priyanshu Patel",
-  "repository": { "type": "git", "url": "https://github.com/Priyanshu-1622/Deskly.git" },
-  "keywords": ["ai-agents", "electron", "threejs", "productivity", "first-person", "llm"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Priyanshu-1622/Deskly.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "electron",
+    "threejs",
+    "productivity",
+    "first-person",
+    "llm"
+  ],
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -15,20 +25,61 @@
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux"
+    "dist:linux": "electron-builder --linux",
+    "lint": "eslint src tools test",
+    "smoke": "node tools/visual-smoke.cjs",
+    "check": "npm run lint && npm test",
+    "providers:live": "node tools/provider-check.cjs",
+    "benchmark:agents": "node tools/agent-benchmark.cjs"
   },
   "devDependencies": {
-    "electron": "^38.0.0",
-    "electron-builder": "^26.0.0"
+    "@electron/fuses": "2.1.3",
+    "electron": "44.5.1",
+    "electron-builder": "^26.0.0",
+    "eslint": "10.11.0",
+    "eslint-plugin-no-unsanitized": "4.1.5"
   },
   "build": {
     "appId": "dev.deskly.app",
     "productName": "Deskly",
-    "files": ["src/**/*", "package.json"],
-    "directories": { "output": "dist", "buildResources": "build" },
-    "win": { "target": ["nsis"], "icon": "build/icon.png" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
-    "mac": { "target": ["dmg"], "category": "public.app-category.productivity", "icon": "build/icon.png" },
-    "linux": { "target": ["AppImage"], "category": "Office", "icon": "build/icon.png" }
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "hardenedRuntime": true,
+      "notarize": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office",
+      "icon": "build/icon.png"
+    },
+    "afterPack": "tools/after-pack.cjs",
+    "asar": true
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

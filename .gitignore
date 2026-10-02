@@ -1,5 +1,12 @@
 node_modules/
 dist/
+out/
+release/
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.asar
 *.log
 .DS_Store
 .npm-cache/
@@ -13,6 +20,7 @@ dist/
 deskly-config.json
 deskly-secrets.json
 team-context.json*
+group-conversations.json*
 tasks.json
 audit.jsonl
 __pycache__/

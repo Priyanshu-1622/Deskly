@@ -84,9 +84,11 @@
     Reception: { room: 'Reception', color: '#1f7f7a', seats: 2 }
   };
   // one template per role, taken from the default team
+  const ROLE_AREAS = { Developer: 'backend', 'Frontend Developer': 'frontend', 'DevOps Engineer': 'operations', 'Product Designer': 'frontend', 'Data Analyst': 'backend', 'IT Administrator': 'operations' };
+  for (const t of DEFAULT_TEAM) t.workArea = ROLE_AREAS[t.role] || 'docs';
   const ROLES = {};
-  for (const t of DEFAULT_TEAM) ROLES[t.role] = { role: t.role, dept: t.dept, scope: t.scope, persona: t.persona, resume: DesklyResumes.forRole(t.role), instructions: DesklyRolePrompts.forRole(t.role), tasks: t.tasks, deliverable: t.deliverable };
-  ROLES['Custom role'] = { role: 'Custom role', dept: 'Engineering', scope: 'whatever you describe', persona: 'Helpful, clear and proactive.', resume: DesklyResumes.forRole('Custom role'), instructions: DesklyRolePrompts.forRole('Custom role'), tasks: [] };
+  for (const t of DEFAULT_TEAM) ROLES[t.role] = { role: t.role, workArea: t.workArea, dept: t.dept, scope: t.scope, persona: t.persona, resume: DesklyResumes.forRole(t.role), instructions: DesklyRolePrompts.forRole(t.role), tasks: t.tasks, deliverable: t.deliverable };
+  ROLES['Custom role'] = { role: 'Custom role', workArea: 'docs', dept: 'Engineering', scope: 'whatever you describe', persona: 'Helpful, clear and proactive.', resume: DesklyResumes.forRole('Custom role'), instructions: DesklyRolePrompts.forRole('Custom role'), tasks: [] };
 
   const LOOKS = {
     skins: ['#f5d7c4', '#f1d0b5', '#e7bb98', '#d8a882', '#c98f68', '#b97c55', '#8d5a3b', '#6b4029'],
@@ -102,7 +104,7 @@
     const pick = a => a[Math.floor(Math.random() * a.length)];
     const fem = Math.random() < 0.5;
     return {
-      id: newId(), name: overrides.name || 'New teammate', role: R.role, dept: R.dept, scope: R.scope, persona: R.persona, resume: DesklyResumes.forRole(R.role), instructions: R.instructions,
+      id: newId(), name: overrides.name || 'New teammate', role: R.role, workArea: R.workArea, dept: R.dept, scope: R.scope, persona: R.persona, resume: DesklyResumes.forRole(R.role), instructions: R.instructions,
       tasks: R.tasks.slice(), deliverable: R.deliverable || 'markdown', provider: 'demo', model: '', baseUrl: '',
       look: {
         height: fem ? 1.64 + Math.random() * 0.08 : 1.72 + Math.random() * 0.1, skin: pick(LOOKS.skins), hair: pick(LOOKS.hairColors),
@@ -120,7 +122,7 @@
   }
   function defaultTeam() {
     return DEFAULT_TEAM.map(t => ({
-      id: t.id, name: t.name, role: t.role, dept: t.dept, scope: t.scope, persona: t.persona, resume: DesklyResumes.forRole(t.role), instructions: DesklyRolePrompts.forRole(t.role), tasks: t.tasks.slice(),
+      id: t.id, name: t.name, role: t.role, workArea: t.workArea, dept: t.dept, scope: t.scope, persona: t.persona, resume: DesklyResumes.forRole(t.role), instructions: DesklyRolePrompts.forRole(t.role), tasks: t.tasks.slice(),
       deliverable: t.deliverable, provider: 'demo', model: '', baseUrl: '',
       look: { ...t.look, body: t.look.bust ? 'feminine' : 'masculine',
         faceA:[0,.2,.45,.65,0][[...t.id].reduce((n,c)=>n+c.charCodeAt(0),0)%5],

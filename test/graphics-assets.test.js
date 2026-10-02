@@ -75,8 +75,10 @@ test('authored employees animate with independent skeletons and retain the exist
   a.seatH=.6; a.setMode('sitType'); a.update(.01); assert.ok(Math.abs(a.root.position.y-.1)<.0001);
   assert.equal(a.cup.parent, a.root.getObjectByName('RightHand'));
   a.setMode('stand'); a.update(.01); assert.equal(a.root.position.y,0);
-  a.root.traverse(o => o.geometry?.dispose());
-  assert.notEqual(a.root.children[0].children[0].geometry, b.root.children[0].children[0].geometry);
+  assert.equal(a.root.children[0].children[0].geometry, b.root.children[0].children[0].geometry);
+  let disposed=false;geometry.addEventListener('dispose',()=>{disposed=true;});
+  a.dispose();assert.equal(disposed,false,'Removing an employee must preserve shared geometry');
+  b.update(.1);assert.ok(b.root.getObjectByName('RightHand'));
 });
 
 test('the ceiling encloses every room while skylights and raised stairwell roofs remain clear', () => {
@@ -127,7 +129,21 @@ test('detailed employees bundle a valid skin, facial morphs, hair and transparen
         let sum=0;for(let j=0;j<4;j++){const weight=bytes.readFloatLE(binaryStart+v.byteOffset+i*16+j*4);assert.ok(weight>=0);sum+=weight;}
         assert.ok(Math.abs(sum-1)<.0001);
       }
-      if(!['Clothes','Shoes'].includes(mesh.name))assert.equal(p.targets.length,2);
+      if(!['Clothes','Shoes'].includes(mesh.name)){
+        assert.equal(p.targets.length,2);
+        for(const target of p.targets){
+          const normal=gltf.accessors[target.NORMAL];
+          assert.equal(normal.count,gltf.accessors[p.attributes.POSITION].count);
+          const view=gltf.bufferViews[normal.bufferView];
+          for(let i=0;i<normal.count*3;i++)assert.ok(Number.isFinite(bytes.readFloatLE(binaryStart+view.byteOffset+i*4)));
+          if(mesh.name==='Eyeballs'){
+            const position=gltf.accessors[target.POSITION],buffer=gltf.bufferViews[position.bufferView];
+            let shift=0;
+            for(let i=0;i<position.count;i++)shift+=bytes.readFloatLE(binaryStart+buffer.byteOffset+i*12+4);
+            assert.ok(Math.abs(shift/position.count)<.025,'Facial identity must not move the eyes away from the head skeleton');
+          }
+        }
+      }
     }
     assert.equal(gltf.materials.find(m=>m.name==='Eyes').alphaMode,'MASK');
     assert.ok(gltf.meshes.some(m=>m.name==='Shoes'));

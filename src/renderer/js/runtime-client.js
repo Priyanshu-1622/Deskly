@@ -11,6 +11,7 @@
     constructor(bus, onError) { this.bus = bus; this.tasks = new Map(); this.approvals = []; this.onError = onError || (() => { }); }
     async init() {
       const s = await DK.tasksSnapshot();
+      this.notices = s.notices || []; this.lastSaveError = s.lastSaveError; this.lastAuditError = s.lastAuditError; if (this.notices.length || this.lastSaveError || this.lastAuditError) this.onError([...this.notices, this.lastSaveError, this.lastAuditError].filter(Boolean).join('\n'));
       this.tasks.clear(); s.tasks.forEach(t => this.tasks.set(t.id, t)); this.approvals = s.approvals;
       if (!this.unsub) this.unsub = DK.onRuntimeEvent(evt => {
         if (evt.task) this.tasks.set(evt.task.id, evt.task);

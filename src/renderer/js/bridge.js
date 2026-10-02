@@ -19,6 +19,19 @@
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const saveFiles = () => put('files', [...files.entries()]);
   const cfg = () => get('config', null);
+  const groups = get('groups', []), groupRounds = new Map();
+  const groupSave = () => put('groups', groups);
+  const groupGet = id => {
+    const s = groups.find(s => s.id === id && s.project === (cfg()?.workspace || null));
+    if (!s) throw Error('Discussion is unavailable in this project.');
+    return s;
+  };
+  const groupAppend = (s, kind, name, text, employeeId = null) => {
+    if (s.messages.length >= 500) throw Error('This discussion is full. Start a new meeting.');
+    s.messages.push({ id: uid('message'), kind, name, text, employeeId, at: now() });
+    s.updatedAt = now(); groupSave(); emit('group.updated', { groupId: s.id, status: s.status, speakerId: s.speakerId });
+  };
+  for (const s of groups) if (s.status === 'running') { s.status = 'idle'; s.speakerId = null; if(s.messages.length<500)groupAppend(s, 'system', 'Deskly', 'Completed replies were saved. Start another round to continue.');else groupSave(); }
 
   async function run(t) {
     const set = (s, x = {}) => { Object.assign(t, x, { status: s, updatedAt: now() }); emit('task.status_changed', { taskId: t.id, employeeId: t.employeeId, status: s }); };
@@ -50,6 +63,8 @@
     configReset: async () => { localStorage.removeItem(LS + 'config'); localStorage.removeItem(LS + 'keys'); return true; },
     secretSet: async (id, v) => { const k = get('keys', {}); if (v) k[id] = true; else delete k[id]; put('keys', k); return k; },   // never stores the key in the browser build
     providerTest: async p => { if (p.provider !== 'demo') throw new Error('Keys can only be tested in the desktop app.'); return { ok: true, ms: 1, sample: 'ready' }; },
+    dataErase: async () => { if (!confirm('Erase all Deskly preview settings, notes, tasks and whiteboards?')) return false; await window.DesklyOfficeTools?.erase(); for (const key of Object.keys(localStorage)) if (key.startsWith('deskly.')) localStorage.removeItem(key); location.reload(); return true; },
+    workspaceIgnoreMap: async () => { throw Error('Git workspace tools require the desktop app.'); },
     workspaceChoose: async () => 'Browser workspace',
     workspaceList: async () => [...files.keys()].sort().map(p => ({ path: p, dir: false })),
     workspaceRead: async p => { if (!files.has(p)) throw new Error('File not found'); return files.get(p); },
@@ -78,6 +93,43 @@
     auditExport: async () => null,
     employeeReply: async (id, ctx) => `(demo) I'm ${ctx}. In the desktop app with an API key I'd give you a real answer.`,
     meetingIdeas: async (topic, people) => people.map(p => ({ id: p.id, line: `(demo) From ${p.role}: I'd look at how "${topic}" changes my current work.` })),
+    groupList: async () => groups.filter(s => s.project === (cfg()?.workspace || null)).map(pub).reverse(),
+    groupGet: async id => pub(groupGet(id)),
+    groupStart: async (room, topic, ids) => {
+      if (!ids.length || new Set(ids).size !== ids.length || groups.length >= 200) throw Error('Invalid participants or discussion archive is full.');
+      const participants = ids.map(id => { const e = cfg()?.employees?.find(e => e.id === id); if (!e) throw Error('Unknown employee'); return { id, name: e.name, role: e.role }; });
+      const s = { id: uid('group'), room, topic: topic || 'Group conversation', project: cfg()?.workspace || null, participants, messages: [], status: 'idle', speakerId: null, createdAt: now(), updatedAt: now() };
+      groups.push(s); groupSave(); return pub(s);
+    },
+    groupSend: async (id, text, responders) => {
+      const s = groupGet(id);
+      if (s.status !== 'idle') throw Error('This discussion is running or has ended.');
+      if (new Set(responders).size !== responders.length || responders.some(id => !s.participants.some(p => p.id === id))) throw Error('Selected speaker is not in this discussion.');
+      if (text.length > 5000 || (!text.trim() && (!responders.length || !s.messages.some(m => m.kind === 'founder')))) throw Error('Write a message first.');
+      if (s.messages.length + responders.length + 1 > 500) throw Error('This discussion is full.');
+      if (text.trim()) groupAppend(s, 'founder', cfg()?.founder || 'Founder', text.trim());
+      const round = { stopped: false }; groupRounds.set(id, round); s.status = 'running'; groupSave();
+      try {
+        for (const employeeId of responders) {
+          if (round.stopped || s.project !== (cfg()?.workspace || null)) break;
+          const e = s.participants.find(p => p.id === employeeId); s.speakerId = employeeId; groupSave();
+          await wait(350);
+          if (round.stopped || s.project !== (cfg()?.workspace || null)) break;
+          groupAppend(s, 'employee', e.name, `(Browser demo) ${e.role}: I can read the shared discussion. Connect a provider in the desktop app for real ideas and replies.`, employeeId);
+        }
+      } finally { groupRounds.delete(id); s.speakerId = null; if (s.status !== 'ended') s.status = 'idle'; groupSave(); }
+      return pub(s);
+    },
+    groupCancel: async id => { const s = groupGet(id), round = groupRounds.get(id); if (round) round.stopped = true; return pub(s); },
+    groupEnd: async id => { const s = groupGet(id), round = groupRounds.get(id); if (round) round.stopped = true; s.status = 'ended'; s.speakerId = null; groupSave(); return pub(s); },
+    groupDecision: async (id, text) => {
+      const s = groupGet(id);
+      if (s.status !== 'idle' || !text.trim() || text.length > 700) throw Error('Finish the round and enter a decision of up to 700 characters.');
+      if (!cfg()?.workspace) throw Error('Choose a project folder first.');
+      groupAppend(s, 'decision', cfg()?.founder || 'Founder', text.trim());
+      for (const p of s.participants) await window.DK.memoryAdd(p.id, 'project', text.trim(), 'decision');
+      return pub(s);
+    },
     assistantChat: async () => 'This is the browser build, so your assistant is offline. In the desktop app it uses the provider and key from Settings → Your assistant.',
     shellExternal: async url => { window.open(url, '_blank'); return true; },
     appFullscreen: async () => { try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch { } return !!document.fullscreenElement; },

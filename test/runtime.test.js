@@ -95,7 +95,7 @@ test('plaintext fallback backend cannot store API keys', () => {
 test('role instructions are specific and can be replaced per employee', () => {
   assert.match(forRole('Frontend Developer'), /keyboard and screen-reader/);
   assert.match(forRole('DevOps Engineer'), /rollback/);
-  const cfg = { workspace: tmp(), employees: [{ id: 'e1', name: 'Lena', role: 'Frontend Developer', instructions: 'Follow our design tokens exactly.' }] };
+  const cfg = { security: { approveWrites: false }, workspace: tmp(), employees: [{ id: 'e1', name: 'Lena', role: 'Frontend Developer', instructions: 'Follow our design tokens exactly.' }] };
   const rt = new Runtime({ dataDir: tmp(), getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: () => {} });
   assert.match(rt.systemPrompt(cfg.employees[0], cfg), /Follow our design tokens exactly/);
   assert.doesNotMatch(rt.systemPrompt(cfg.employees[0], cfg), /keyboard and screen-reader/);
@@ -114,16 +114,17 @@ test('employee résumé defaults and edits reach the AI instructions', () => {
   assert.ok(resumeForEmployee({ role: 'Developer' }).knowledge.length > 0);
 });
 
-test('memory is scoped by employee and project, while approved global notes travel', () => {
+test('memory is scoped by employee and project, while approved global notes travel', async () => {
   const dir = tmp(), one = tmp(), two = tmp();
   const team = new TeamContext(dir);
-  team.addMemory({ employeeId: 'e1', projectRoot: one, scope: 'project', text: 'Use the local API contract.' });
-  team.addMemory({ employeeId: 'e1', projectRoot: one, scope: 'global', text: 'Founder prefers concise handoffs.' });
-  team.addMemory({ employeeId: 'e2', projectRoot: one, scope: 'global', text: 'Other employee note.' });
+  team.addMemory({ employeeId: 'e1', source: 'founder', projectRoot: one, scope: 'project', text: 'Use the local API contract.' });
+  team.addMemory({ employeeId: 'e1', source: 'founder', projectRoot: one, scope: 'global', text: 'Founder prefers concise handoffs.' });
+  team.addMemory({ employeeId: 'e2', source: 'founder', projectRoot: one, scope: 'global', text: 'Other employee note.' });
   assert.deepEqual(team.memoriesFor('e1', one).map(m => m.text), ['Use the local API contract.', 'Founder prefers concise handoffs.']);
   assert.deepEqual(team.memoriesFor('e1', two).map(m => m.text), ['Founder prefers concise handoffs.']);
+  await team.flush();
   assert.deepEqual(new TeamContext(dir).memoriesFor('e1', two).map(m => m.text), ['Founder prefers concise handoffs.']);
-  team.addMemory({ employeeId: 'e1', projectRoot: one, scope: 'project', text: 'Marketing copy uses a warm voice.' });
+  team.addMemory({ employeeId: 'e1', source: 'founder', projectRoot: one, scope: 'project', text: 'Marketing copy uses a warm voice.' });
   assert.deepEqual(team.memoriesFor('e1', one, 1, 'API contract').map(m => m.text), ['Use the local API contract.']);
 });
 
@@ -148,9 +149,10 @@ test('active tasks cannot claim the same file', () => {
   assert.throws(() => rt.claimFile(second, new Workspace(project), 'src/api.js'), /being changed by Aarav/);
 });
 
-test('usage meter persists provider reported tokens without estimating dollars', () => {
+test('usage meter persists provider reported tokens without estimating dollars', async () => {
   const dir = tmp(), project = tmp(), team = new TeamContext(dir);
   team.recordUsage({ employeeId: 'e1', projectRoot: project, provider: 'openai', model: 'example-model', input: 100, output: 20, cached: 40 });
+  await team.flush();
   const [row] = new TeamContext(dir).usage();
   assert.deepEqual({ calls: row.calls, input: row.input, output: row.output, cached: row.cached }, { calls: 1, input: 100, output: 20, cached: 40 });
 });
@@ -187,7 +189,7 @@ test('parseJSON tolerates fences and chatter', () => {
 
 test('demo employee runs plan → tools → approval → result', async () => {
   const dir = tmp(), ws = tmp();
-  const cfg = { company: 'Test Co', founder: 'P', workspace: ws, employees: [{ id: 'e1', name: 'Ada', role: 'Developer', provider: 'demo' }] };
+  const cfg = { security: { approveWrites: false }, company: 'Test Co', founder: 'P', workspace: ws, employees: [{ id: 'e1', name: 'Ada', role: 'Developer', provider: 'demo' }] };
   const events = [];
   const rt = new Runtime({ dataDir: dir, getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: e => events.push(e) });
   const t = rt.create({ employeeId: 'e1', description: 'Write a note' });
@@ -203,11 +205,12 @@ test('demo employee runs plan → tools → approval → result', async () => {
   assert.ok(fs.existsSync(path.join(ws, 'deskly-output/ada-demo-note.md')));
   assert.ok(done.result.files.some(f => f.startsWith('deskly-output/')));
   assert.ok(events.some(e => e.type === 'task.completed'));
+  await rt.flush();
   assert.ok(fs.readFileSync(path.join(dir, 'audit.jsonl'), 'utf8').includes('approval.responded'));
 });
 
 test('rejecting an approval stops nothing silently', async () => {
-  const cfg = { workspace: tmp(), employees: [{ id: 'e1', name: 'Ada', role: 'Dev', provider: 'demo' }] };
+  const cfg = { security: { approveWrites: false }, workspace: tmp(), employees: [{ id: 'e1', name: 'Ada', role: 'Dev', provider: 'demo' }] };
   const rt = new Runtime({ dataDir: tmp(), getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: () => { } });
   const t = rt.create({ employeeId: 'e1', description: 'x' });
   for (let i = 0; i < 100 && !rt.pendingApprovals().length; i++) await new Promise(r => setTimeout(r, 20));
@@ -218,7 +221,7 @@ test('rejecting an approval stops nothing silently', async () => {
 
 test('simultaneous demo employees keep their task steps separate', async () => {
   const project = tmp();
-  const cfg = { workspace: project, employees: [{ id: 'ada', name: 'Ada', role: 'Developer', provider: 'demo' }, { id: 'eve', name: 'Eve', role: 'Developer', provider: 'demo' }] };
+  const cfg = { security: { approveWrites: false }, workspace: project, employees: [{ id: 'ada', name: 'Ada', role: 'Developer', provider: 'demo' }, { id: 'eve', name: 'Eve', role: 'Developer', provider: 'demo' }] };
   const rt = new Runtime({ dataDir: tmp(), getConfig: () => cfg, profileFor: () => ({ provider: 'demo' }), emit: () => {} });
   const a = rt.create({ employeeId: 'ada', description: 'Write a note' });
   const b = rt.create({ employeeId: 'eve', description: 'Write a note' });
